@@ -1,0 +1,13 @@
+
+{
+  "appId": "com.resonancegrid.game",
+  "appName": "Resonance Grid",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "AdMob": {
+      "androidAppId": "ca-app-pub-3249868133464237~6513813083",
+      "iosAppId": "ca-app-pub-3249868133464237~6513813083"
+    }
+  }
+}
