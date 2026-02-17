@@ -12,13 +12,13 @@ declare global {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDPE099FixUvZh06pE7cutXzsRED9fiihs",
-  authDomain: "neon-survivor-59f98.firebaseapp.com",
-  projectId: "neon-survivor-59f98",
-  storageBucket: "neon-survivor-59f98.firebasestorage.app",
-  messagingSenderId: "496770430592",
-  appId: "1:496770430592:web:ce0d93a7de05436bf79865",
-  measurementId: "G-YJVTZBS8ZT"
+    apiKey: "AIzaSyDPE099FixUvZh06pE7cutXzsRED9fiihs",
+    authDomain: "neon-survivor-59f98.firebaseapp.com",
+    projectId: "neon-survivor-59f98",
+    storageBucket: "neon-survivor-59f98.firebasestorage.app",
+    messagingSenderId: "496770430592",
+    appId: "1:496770430592:web:ce0d93a7de05436bf79865",
+    measurementId: "G-YJVTZBS8ZT"
 };
 
 let db: any = null;
@@ -35,7 +35,7 @@ const initFirebase = async () => {
     try {
         console.log("Analytics: Initializing Firebase...");
         const app = initializeApp(firebaseConfig);
-        
+
         // Initialize Firestore
         try {
             db = getFirestore(app);
@@ -47,10 +47,10 @@ const initFirebase = async () => {
 
         // Initialize Auth
         auth = getAuth(app);
-        
+
         // Sign in anonymously
         await signInAnonymously(auth);
-        
+
         isInitialized = true;
         console.log(`Analytics: Firebase connected & authenticated as ${auth.currentUser?.uid}`);
     } catch (e) {
@@ -83,7 +83,7 @@ let cachedLocation: { city: string, region: string, country: string } | null = n
 
 const fetchApproximateLocation = async () => {
     if (cachedLocation) return cachedLocation;
-    
+
     try {
         // Use a public IP-based geolocation service
         const response = await fetch('https://ipapi.co/json/');
@@ -117,22 +117,24 @@ export const trackEvent = async (
     metaState: MetaState,
     waveIndex: number,
     sessionChips: number,
+    runDuration: number,
     additionalData: Record<string, any> = {}
 ) => {
     // 1. Google Analytics Tracking
     if (typeof window !== 'undefined' && window.gtag) {
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
+
         const gaPayload = {
             run_id: runId,
             event_category: 'gameplay',
             event_label: `Wave ${waveIndex}`,
             value: sessionChips,
+            run_duration: runDuration,
             player_level: player.level,
             weapon_count: player.weapons.length,
             character_health: player.health,
             // debug_mode: true ensures events show up in GA4 "DebugView" even from localhost
-            debug_mode: isLocalhost, 
+            debug_mode: isLocalhost,
             ...additionalData
         };
 
@@ -156,6 +158,7 @@ export const trackEvent = async (
         device: navigator.userAgent,
         timestamp: Date.now(),
         action,
+        runDuration,
         health: player.health,
         rank: player.level,
         wave: waveIndex,

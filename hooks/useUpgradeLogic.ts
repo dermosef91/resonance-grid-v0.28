@@ -8,8 +8,8 @@ import { trackEvent } from '../services/trackingService';
 import { saveMetaState } from '../services/persistence';
 
 export const useUpgradeLogic = (
-    gameState: any, 
-    metaState: any, 
+    gameState: any,
+    metaState: any,
     setMetaState: any
 ) => {
     const {
@@ -19,7 +19,7 @@ export const useUpgradeLogic = (
         sessionCurrencyRef,
         waveIndexRef,
         runIdRef,
-        
+
         setStatus,
         setLevelUpOptions,
         setInventory,
@@ -35,7 +35,7 @@ export const useUpgradeLogic = (
     const generateUpgrades = useCallback(() => {
         const player = playerRef.current;
         const candidates: UpgradeOption[] = [];
-        
+
         const isUnlocked = (id: string) => {
             const baseW = BASE_WEAPONS[id];
             const baseA = BASE_ARTIFACTS[id];
@@ -58,12 +58,12 @@ export const useUpgradeLogic = (
                 });
             });
         }
-        
+
         player.weapons.forEach((w: Weapon) => {
             if (w.expiresAt) return;
 
             const nextLevel = w.level + 1;
-            
+
             if (nextLevel === 5) {
                 candidates.push({
                     id: `upgrade_${w.id}_augment`,
@@ -101,12 +101,12 @@ export const useUpgradeLogic = (
                 });
             }
         });
-        
+
         if (player.artifacts.length < 3) {
             const availableArtifacts = Object.values(BASE_ARTIFACTS).filter(a => !player.artifacts.includes(a.id) && isUnlocked(a.id));
             availableArtifacts.forEach(a => candidates.push(a));
         }
-        
+
         candidates.push(...GLITCH_UPGRADES);
         candidates.push({ id: 'heal', name: 'Ancestral Mending', description: 'Heal 50% Health', type: 'STAT', rarity: 'COMMON', color: '#00ff00', apply: (p: Player) => { p.health = Math.min(p.maxHealth, p.health + p.maxHealth * 0.5); p.healthPulseTimer = 15; } });
         candidates.push({ id: 'speed', name: 'Rhythm Stride', description: '10% increased Movement and Projectile Speed', type: 'STAT', rarity: 'COMMON', color: '#33ccff', apply: (p: Player) => { p.stats.speedMult += 0.1; p.speed = PLAYER_BASE_STATS.speed * p.stats.speedMult; } });
@@ -114,9 +114,9 @@ export const useUpgradeLogic = (
         candidates.push({ id: 'area', name: 'Cosmic Expansion', description: '15% increased projectile/aura radius on all weapons', type: 'STAT', rarity: 'COMMON', color: '#aa00ff', apply: (p: Player) => { p.stats.areaMult += 0.15; } });
         candidates.push({ id: 'magnet_boost', name: 'Magnetic Field', description: '+15% Item Pickup Range', type: 'STAT', rarity: 'COMMON', color: '#00ccff', apply: (p: Player) => { p.stats.magnetMult += 0.15; p.magnetRadius = PLAYER_BASE_STATS.magnetRadius * p.stats.magnetMult; } });
         candidates.push({ id: 'instant_chips', name: 'Wealth Subroutine', description: '+20 Data Chips', type: 'STAT', rarity: 'COMMON', color: '#FFD700', apply: (p: Player) => { sessionCurrencyRef.current += 20; } });
-        
+
         const WEIGHTS: Record<string, number> = { 'COMMON': 50, 'UNCOMMON': 30, 'RARE': 15, 'LEGENDARY': 5, 'GLITCH': 1 };
-        
+
         const selected: UpgradeOption[] = [];
         const pool = [...candidates];
         for (let i = 0; i < 3; i++) {
@@ -129,7 +129,7 @@ export const useUpgradeLogic = (
         setLevelUpOptions(selected);
     }, [metaState, setLevelUpOptions]);
 
-    const selectUpgrade = useCallback((opt: UpgradeOption) => { 
+    const selectUpgrade = useCallback((opt: UpgradeOption) => {
         opt.apply(playerRef.current);
         if (opt.type !== 'AUGMENT_TRIGGER') {
             if (pendingRewardsRef.current > 0) {
@@ -147,21 +147,21 @@ export const useUpgradeLogic = (
 
     const applyAugment = useCallback((augmentId: string) => {
         if (!augmentTarget) return;
-        
+
         const weapon = playerRef.current.weapons.find((w: Weapon) => w.id === augmentTarget.id);
         if (weapon) {
-            weapon.level++; 
+            weapon.level++;
             weapon.augment = augmentId;
             const progression = WEAPON_UPGRADE_TABLE[weapon.id]?.[5];
             if (progression) progression.apply(weapon);
-            
+
             particlesRef.current.push(createTextParticle(playerRef.current.pos, "SYSTEM MODULATED", '#00FFFF', 90));
             screenShakeRef.current += 15;
             setInventory([...playerRef.current.weapons]);
         }
-        
+
         setAugmentTarget(null);
-        
+
         if (pendingRewardsRef.current > 0) {
             pendingRewardsRef.current--;
             playerRef.current.level++;
@@ -182,7 +182,7 @@ export const useUpgradeLogic = (
             const newState = { ...metaState, currency: metaState.currency + bonus };
             setMetaState(newState);
             saveMetaState(newState);
-            trackEvent(runIdRef.current, 'LOOT_PICKUP', playerRef.current, newState, waveIndexRef.current, bonus, { type: 'AD_REWARD' });
+            trackEvent(runIdRef.current, 'LOOT_PICKUP', playerRef.current, newState, waveIndexRef.current, bonus, Math.floor(gameState.frameRef.current / 60), { type: 'AD_REWARD' });
             return { ...prev, chipsEarned: prev.chipsEarned * 2 };
         });
     }, [metaState, setMetaState, setGameOverInfo]);

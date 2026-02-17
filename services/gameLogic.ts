@@ -1,11 +1,9 @@
-
 import { Entity, EntityType, EnemyType, Player, Enemy, Projectile, Pickup, Weapon, TextParticle, VisualParticle, Vector2, MissionEntity, Obstacle } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, ZOOM_LEVEL, BALANCE } from '../constants';
-import { checkCollision } from './PhysicsSystem';
-import { WeaponStrategies } from './weapons';
+import { checkCollision } from './systems/PhysicsSystem';
+import { WeaponStrategies } from './weapons/index';
 import { getProjectile, getVisualParticle, getTextParticle } from './objectPools';
-import { ALL_ENEMIES_DB } from './gameData';
-
+import { ALL_ENEMIES_DB } from './data/enemies';
 // --- CHAIN LIGHTNING LOGIC ---
 export const handleChainLightning = (projectile: Projectile, hitEnemy: Enemy, allEnemies: Enemy[]): Projectile[] => {
     // 1. Check bounces
@@ -18,7 +16,7 @@ export const handleChainLightning = (projectile: Projectile, hitEnemy: Enemy, al
     // 3. Find ONE nearest neighbor that hasn't been hit
     const range = projectile.chainData.range;
     const rangeSq = range * range;
-    
+
     let nearest: Enemy | null = null;
     let minDistSq = Infinity;
 
@@ -39,7 +37,7 @@ export const handleChainLightning = (projectile: Projectile, hitEnemy: Enemy, al
     if (nearest) {
         const nextTarget = nearest;
         const angle = Math.atan2(nextTarget.pos.y - hitEnemy.pos.y, nextTarget.pos.x - hitEnemy.pos.x);
-        
+
         // Spawn Chain Projectile
         return [getProjectile({
             id: Math.random().toString(),
@@ -75,7 +73,7 @@ export const spawnEnemy = (player: Player, type: EnemyType, overridePos?: Vector
 
     const distance = Math.max(window.innerWidth, window.innerHeight) / ZOOM_LEVEL * 0.7; // Spawn just offscreen
     const angle = Math.random() * Math.PI * 2;
-    
+
     let pos = overridePos || {
         x: player.pos.x + Math.cos(angle) * distance,
         y: player.pos.y + Math.sin(angle) * distance
@@ -83,7 +81,7 @@ export const spawnEnemy = (player: Player, type: EnemyType, overridePos?: Vector
 
     // Scaling
     const waveMult = Math.pow(BALANCE.ENEMY_SCALING_RATE, waveId - 1);
-    
+
     const enemy: Enemy = {
         id: Math.random().toString(),
         type: EntityType.ENEMY,
@@ -124,7 +122,7 @@ export const createObstacle = (pos: Vector2, isMegastructure: boolean = false): 
     const isBox = Math.random() > 0.5;
     const scaleMult = isMegastructure ? 3.0 : 1.0;
     const radius = (30 + Math.random() * 40) * scaleMult;
-    
+
     return {
         id: Math.random().toString(),
         type: EntityType.OBSTACLE,
@@ -141,9 +139,9 @@ export const createObstacle = (pos: Vector2, isMegastructure: boolean = false): 
 };
 
 export const createProjectile = (
-    weapon: Weapon, 
-    player: Player, 
-    targets: Vector2[], 
+    weapon: Weapon,
+    player: Player,
+    targets: Vector2[],
     outParticles: VisualParticle[] = [],
     activeCount: number = 0
 ): Projectile[] => {
@@ -153,19 +151,19 @@ export const createProjectile = (
         const baseDamage = weapon.damage * player.stats.damageMult;
         const baseSpeed = weapon.speed * player.stats.speedMult;
         let totalCount = weapon.count + player.stats.projectileCountFlat;
-        
+
         // ORBITAL LOCK FIX: Prevent infinite accumulation by limiting to weapon count
         if (weapon.augment === 'ORBITAL_LOCK') {
             totalCount = Math.max(0, totalCount - activeCount);
             if (totalCount === 0) return [];
         }
-        
-        return behavior({ 
-            player, 
-            weapon, 
-            targets, 
-            baseDamage, 
-            baseSpeed, 
+
+        return behavior({
+            player,
+            weapon,
+            targets,
+            baseDamage,
+            baseSpeed,
             totalCount,
             onSpawnParticle: (p) => outParticles.push(p)
         });
@@ -224,7 +222,7 @@ export const createSupplyDrop = (pos: Vector2, excludeTemporal: boolean = false)
     // Standard Content
     const roll = Math.random();
     let content: 'CURRENCY_50' | 'FULL_HEALTH' | 'LEVEL_UP' | 'TEMPORAL_BOOST' | 'EXTRA_LIFE' = 'CURRENCY_50';
-    
+
     if (roll > 0.95) content = 'EXTRA_LIFE'; // 5%
     else if (roll > 0.85) content = 'LEVEL_UP'; // 10%
     else if (roll > 0.65) content = 'FULL_HEALTH'; // 20%
@@ -252,7 +250,7 @@ export const createSupplyDrop = (pos: Vector2, excludeTemporal: boolean = false)
     };
 };
 
-export const createTextParticle = (pos: Vector2, text: string, color: string = '#FFFFFF', duration: number = 30): TextParticle => 
+export const createTextParticle = (pos: Vector2, text: string, color: string = '#FFFFFF', duration: number = 30): TextParticle =>
     getTextParticle({
         id: Math.random().toString(),
         type: EntityType.TEXT_PARTICLE,
@@ -268,13 +266,13 @@ export const createTextParticle = (pos: Vector2, text: string, color: string = '
 
 export const createShatterParticles = (pos: Vector2, color: string, count: number = 8, spread: number = 10): VisualParticle[] => {
     const parts: VisualParticle[] = [];
-    for(let i=0; i<count; i++) {
+    for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 1 + Math.random() * 3;
         parts.push(getVisualParticle({
             id: Math.random().toString(),
             type: EntityType.VISUAL_PARTICLE,
-            pos: { x: pos.x + (Math.random()-0.5)*spread, y: pos.y + (Math.random()-0.5)*spread },
+            pos: { x: pos.x + (Math.random() - 0.5) * spread, y: pos.y + (Math.random() - 0.5) * spread },
             velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
             radius: 0,
             color: color,

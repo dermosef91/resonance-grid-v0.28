@@ -2,24 +2,24 @@
 export type Vector2 = { x: number; y: number };
 
 export interface BaseLandscapeConfig {
-    noiseScaleX: number;
-    noiseScaleY: number;
-    amplitude: number;
-    sharpness: number;
-    digitalFactor: number; // 0 = organic, 1 = blocky/stepped
+  noiseScaleX: number;
+  noiseScaleY: number;
+  amplitude: number;
+  sharpness: number;
+  digitalFactor: number; // 0 = organic, 1 = blocky/stepped
 }
 
 export interface LandscapeConfig extends BaseLandscapeConfig {
-    secondary?: BaseLandscapeConfig;
-    blendFactor?: number; // 0 to 1
+  secondary?: BaseLandscapeConfig;
+  blendFactor?: number; // 0 to 1
 }
 
 export interface ColorPalette {
-    background: string;
-    grid: string;
-    nebulaPrimary: string;
-    nebulaSecondary: string;
-    landscape: LandscapeConfig;
+  background: string;
+  grid: string;
+  nebulaPrimary: string;
+  nebulaSecondary: string;
+  landscape: LandscapeConfig;
 }
 
 export enum EntityType {
@@ -34,14 +34,14 @@ export enum EntityType {
 }
 
 export interface Shockwave {
-    id: string;
-    pos: Vector2;
-    time: number;
-    maxDuration: number;
-    maxRadius: number;
-    minRadius?: number; // Inner exclusion zone
-    strength: number;
-    contracting?: boolean; // If true, wave moves inward (radius max -> 0)
+  id: string;
+  pos: Vector2;
+  time: number;
+  maxDuration: number;
+  maxRadius: number;
+  minRadius?: number; // Inner exclusion zone
+  strength: number;
+  contracting?: boolean; // If true, wave moves inward (radius max -> 0)
 }
 
 export enum EnemyType {
@@ -55,7 +55,7 @@ export enum EnemyType {
   BOSS_VANGUARD = 'BOSS_VANGUARD', // Boss 1: Charger / Shooter
   BOSS_HIVE_MIND = 'BOSS_HIVE_MIND', // Boss 2: Spawner / Bullet Hell
   BOSS_SHANGO = 'BOSS_SHANGO', // NEW BOSS: Wave 2 Spinner
-  
+
   // --- NEW IDEATION ENEMIES (Curated) ---
   NEON_COBRA = 'NEON_COBRA',
   INFERNO_SPINNER = 'INFERNO_SPINNER', // Redesigned
@@ -74,7 +74,7 @@ export enum EnemyType {
 
   // --- NEW CONCEPT BOSSES ---
   BOSS_AIDO_HWEDO = 'BOSS_AIDO_HWEDO', // The Boundless Coil
-  
+
   // --- THE TRINITY ---
   BOSS_TRINITY = 'BOSS_TRINITY', // Wave Config Placeholder
   BOSS_TRINITY_CUBE = 'BOSS_TRINITY_CUBE',
@@ -93,40 +93,40 @@ export interface Entity {
 }
 
 export interface Obstacle extends Entity {
-    shape: 'BOX' | 'CYLINDER' | 'HEX';
-    height: number;
-    rotationSpeed: number;
-    rotation: number;
+  shape: 'BOX' | 'CYLINDER' | 'HEX';
+  height: number;
+  rotationSpeed: number;
+  rotation: number;
 }
 
 // New Interface for Mission Entities
 export interface MissionEntity extends Entity {
-    kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON';
-    health: number;
-    maxHealth: number;
-    active: boolean; // For Obelisks/Zones
-    destination?: Vector2; // For Payload
-    opacity?: number; // For fading out
-    filterData?: {
-        angle: number; // Direction of movement (radians)
-        speed: number;
-        holeWidth: number;
-        width: number; // Length of the wall (visually infinite)
-    };
+  kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON';
+  health: number;
+  maxHealth: number;
+  active: boolean; // For Obelisks/Zones
+  destination?: Vector2; // For Payload
+  opacity?: number; // For fading out
+  filterData?: {
+    angle: number; // Direction of movement (radians)
+    speed: number;
+    holeWidth: number;
+    width: number; // Length of the wall (visually infinite)
+  };
 }
 
 export interface PlayerStats {
-    damageMult: number;
-    cooldownMult: number;
-    areaMult: number;
-    speedMult: number;
-    magnetMult: number;
-    xpMult: number;
-    projectileCountFlat: number; // Adds to every weapon's projectile count
-    knockbackMult: number;
-    regen: number; // HP per second
-    armor: number; // Flat damage reduction
-    currencyMult: number;
+  damageMult: number;
+  cooldownMult: number;
+  areaMult: number;
+  speedMult: number;
+  magnetMult: number;
+  xpMult: number;
+  projectileCountFlat: number; // Adds to every weapon's projectile count
+  knockbackMult: number;
+  regen: number; // HP per second
+  armor: number; // Flat damage reduction
+  currencyMult: number;
 }
 
 export interface Player extends Entity {
@@ -144,25 +144,25 @@ export interface Player extends Entity {
   invulnerabilityTimer: number; // I-Frames: >0 means player is invincible
   weapons: Weapon[];
   artifacts: string[]; // List of IDs of collected artifacts
-  
+
   // Visual State
   xpPulseTimer: number;
   healthPulseTimer: number;
-  
+
   // Power-up States
   kaleidoscopeTimer: number; // >0 means Kaleidoscope effect is active
 
   stats: PlayerStats;
-  
+
   // Logic State
   positionHistory: Vector2[]; // Stores last 120 frames of positions for Time Slip
 }
 
 export interface Replica extends Entity {
-    rotation: number;
-    weapons: Weapon[];
-    stats: PlayerStats;
-    lifeTime: number; 
+  rotation: number;
+  weapons: Weapon[];
+  stats: PlayerStats;
+  lifeTime: number;
 }
 
 export interface Enemy extends Entity {
@@ -176,7 +176,7 @@ export interface Enemy extends Entity {
   isBoss: boolean;
   isMissionTarget?: boolean; // New: For ELIMINATE missions
   attackTimer: number; // For controlling boss pattern
-  state?: 'IDLE' | 'CHARGE' | 'COOLDOWN' | 'ATTACK' | 'PHASE_IN' | 'PHASE_OUT' | 'AIMING' | 'SPIN' | 'LOCK' | 'FIRE' | 'FLARE'; 
+  state?: 'IDLE' | 'CHARGE' | 'COOLDOWN' | 'ATTACK' | 'PHASE_IN' | 'PHASE_OUT' | 'AIMING' | 'SPIN' | 'LOCK' | 'FIRE' | 'FLARE';
   rotation?: number; // For directional enemies like Lancer
   rotVelocity?: number; // Physics tumbling
   opacity?: number; // For stealth enemies like Ghost
@@ -184,17 +184,18 @@ export interface Enemy extends Entity {
   slowTimer?: number; // Frames remaining for slow (Augment: Entropy)
   immuneTimers: Record<string, number>; // WeaponID -> Frames remaining of immunity
   gravityPull?: number; // Strength of pull on player
+  voidSiphonTimer?: number; // Added for Void Siphon augment
   // Special drop flag for Kaleidoscope Evolution
   deathColor?: 'RED' | 'GREEN' | 'BLUE';
-  
+
   // Custom data for arbitrary behaviors
   customData?: any;
 
   // Specific to Mandelbrot Mite
   miteData?: {
-      generation: number; // 0 = Big, 1 = Med, 2 = Small
+    generation: number; // 0 = Big, 1 = Med, 2 = Small
   };
-  
+
   // Specific to Binary Sentinel
   binaryData?: {
     angle: number;       // Current rotation of the pair
@@ -204,34 +205,34 @@ export interface Enemy extends Entity {
   };
   // Specific to Aido-Hwedo
   aidoData?: {
-      innerAngle: number;
-      outerAngle: number;
-      phase2Ring?: { // Renamed from middleRing, now Outer-Outer
-          angle: number;
-          active: boolean; // Triggered at <25% HP
-          doorTimer: number; // Cycle timer
-          doorsOpen: boolean; // Safe or Spikes?
-      };
-      phaseStartHealth: number; // Health at start of current phase
-      flareTimer: number; // Duration of ejection event
+    innerAngle: number;
+    outerAngle: number;
+    phase2Ring?: { // Renamed from middleRing, now Outer-Outer
+      angle: number;
+      active: boolean; // Triggered at <25% HP
+      doorTimer: number; // Cycle timer
+      doorsOpen: boolean; // Safe or Spikes?
+    };
+    phaseStartHealth: number; // Health at start of current phase
+    flareTimer: number; // Duration of ejection event
   };
   // Specific to Boss Vanguard
   vanguardData?: {
-      phase: number; // 0 (100%), 1 (75%), 2 (50%), 3 (25%)
+    phase: number; // 0 (100%), 1 (75%), 2 (50%), 3 (25%)
   };
   // Specific to The Trinity
   trinityData?: {
-      role: 'AGGRESSOR' | 'SUPPORT';
-      siblings: string[]; // IDs of other parts
-      type: 'CUBE' | 'PYRAMID' | 'ORB';
-      // Runtime state
-      subState?: string;
-      subTimer?: number;
-      attackCount?: number;
-      expansion?: number; // Cube: 0 to 1
-      deformation?: number; // Pyramid: 0 to 1
-      gap?: number; // Orb: 0 to 1
-      aimAngle?: number; // For charging/firing
+    role: 'AGGRESSOR' | 'SUPPORT';
+    siblings: string[]; // IDs of other parts
+    type: 'CUBE' | 'PYRAMID' | 'ORB';
+    // Runtime state
+    subState?: string;
+    subTimer?: number;
+    attackCount?: number;
+    expansion?: number; // Cube: 0 to 1
+    deformation?: number; // Pyramid: 0 to 1
+    gap?: number; // Orb: 0 to 1
+    aimAngle?: number; // For charging/firing
   };
 }
 
@@ -246,7 +247,7 @@ export interface Projectile extends Entity {
   turnSpeed?: number; // How fast it turns towards target
   sourceWeaponId?: string; // ID of weapon that fired this
   hitEnemyIds?: string[]; // IDs of enemies already hit by this projectile (for piercing)
-  
+
   customData?: any; // Generic data for augments and custom behaviors
 
   // Chain Lightning specific
@@ -296,33 +297,33 @@ export interface Projectile extends Entity {
   };
   // Paradox Pendulum specific
   paradoxData?: {
-      baseAngle: number;
-      sweepAngle: number; // Total arc width
-      currentPhase: number; // 0 to 1
-      state: 'FORWARD' | 'REWIND';
-      isEvolution: boolean;
-      armLength: number;
-      swingDir: number; // 1 = Normal, -1 = Counter/Echo
+    baseAngle: number;
+    sweepAngle: number; // Total arc width
+    currentPhase: number; // 0 to 1
+    state: 'FORWARD' | 'REWIND';
+    isEvolution: boolean;
+    armLength: number;
+    swingDir: number; // 1 = Normal, -1 = Counter/Echo
   };
   // Kaleidoscope Gaze Specific
   kaleidoscopeData?: {
-      colorType: 'WHITE' | 'RED' | 'GREEN' | 'BLUE';
-      generation: number; // 0=White, 1=RGB, 2=Sub-split
-      splitCount: number; 
-      isGodhead: boolean; // Evolution Flag
+    colorType: 'WHITE' | 'RED' | 'GREEN' | 'BLUE';
+    generation: number; // 0=White, 1=RGB, 2=Sub-split
+    splitCount: number;
+    isGodhead: boolean; // Evolution Flag
   };
   // Fractal Bloom Specific
   fractalData?: {
-      rotationSpeed: number;
-      hueShift: number;
-      branches: number;
-      recursionDepth: number;
+    rotationSpeed: number;
+    hueShift: number;
+    branches: number;
+    recursionDepth: number;
   };
   // Polygon Data for Special Effects (Void Loop)
   polyPoints?: Vector2[];
   // Event Horizon Anchor Data
   anchorData?: {
-      pullRadius: number;
+    pullRadius: number;
   };
 }
 
@@ -348,7 +349,7 @@ export interface VisualParticle extends Entity {
   rotation?: number;
   rotationSpeed?: number;
   shape?: 'SQUARE' | 'LINE' | 'CIRCLE';
-  
+
   // New Light Cast Properties
   lightColor?: string;
   lightRadius?: number;
@@ -375,7 +376,7 @@ export interface Weapon {
   duration: number; // How long projectile lasts
   area: number;     // Size/Radius modifier (or Jump Range for CHAIN)
   speed: number;    // Projectile speed (used for length in beams)
-  
+
   // Meta Progression
   unlockCost?: number;
   unlockReq?: UnlockRequirement;
@@ -385,16 +386,16 @@ export interface Weapon {
 
   // Temporary Logic
   expiresAt?: number; // Frame count when weapon should be removed
-  
+
   // Custom tracking logic
   customData?: any;
 }
 
 export interface AugmentDef {
-    id: string;
-    name: string;
-    description: string;
-    color: string;
+  id: string;
+  name: string;
+  description: string;
+  color: string;
 }
 
 export interface UpgradeOption {
@@ -406,7 +407,7 @@ export interface UpgradeOption {
   weaponId?: string; // If related to a weapon
   color?: string; // For UI
   apply: (player: Player) => void;
-  
+
   // Meta Progression
   unlockCost?: number;
   unlockReq?: UnlockRequirement;
@@ -433,49 +434,49 @@ export interface MetaState {
 
 // --- MISSION SYSTEM TYPES ---
 export enum MissionType {
-    SURVIVE = 'SURVIVE',
-    ELIMINATE = 'ELIMINATE',
-    DATA_RUN = 'DATA_RUN',
-    BOSS = 'BOSS',
-    KING_OF_THE_HILL = 'KING_OF_THE_HILL',
-    PAYLOAD_ESCORT = 'PAYLOAD_ESCORT',
-    RITUAL_CIRCLE = 'RITUAL_CIRCLE',
-    // New Types
-    SHADOW_STEP = 'SHADOW_STEP',
-    WEAPON_OVERRIDE = 'WEAPON_OVERRIDE',
-    ENTANGLEMENT = 'ENTANGLEMENT',
-    THE_GREAT_FILTER = 'THE_GREAT_FILTER',
-    EVENT_HORIZON = 'EVENT_HORIZON'
+  SURVIVE = 'SURVIVE',
+  ELIMINATE = 'ELIMINATE',
+  DATA_RUN = 'DATA_RUN',
+  BOSS = 'BOSS',
+  KING_OF_THE_HILL = 'KING_OF_THE_HILL',
+  PAYLOAD_ESCORT = 'PAYLOAD_ESCORT',
+  RITUAL_CIRCLE = 'RITUAL_CIRCLE',
+  // New Types
+  SHADOW_STEP = 'SHADOW_STEP',
+  WEAPON_OVERRIDE = 'WEAPON_OVERRIDE',
+  ENTANGLEMENT = 'ENTANGLEMENT',
+  THE_GREAT_FILTER = 'THE_GREAT_FILTER',
+  EVENT_HORIZON = 'EVENT_HORIZON'
 }
 
 export interface MissionState {
-    type: MissionType;
-    description: string;
-    progress: number;
-    total: number;
-    isComplete: boolean;
-    // Context data
-    targetIds?: string[]; // IDs of entities to kill/find
-    stage?: 'LOCATE_FRAGMENT' | 'UPLOAD_DATA' | string; // For Data Run / Ritual
-    customData?: {
-        wallX?: number; // For Firewall (Deprecated but type safety)
-        wallSpeed?: number;
-        backupWeapons?: Weapon[]; // For Weapon Override
-        spawned?: boolean; 
-        uploadTimer?: number; // Added for delay
-        cloneOffset?: Vector2; // For Entanglement
-        cloneAlive?: boolean; // For Entanglement
-        filterSafeZoneId?: string; // For Great Filter
-    };
+  type: MissionType;
+  description: string;
+  progress: number;
+  total: number;
+  isComplete: boolean;
+  // Context data
+  targetIds?: string[]; // IDs of entities to kill/find
+  stage?: 'LOCATE_FRAGMENT' | 'UPLOAD_DATA' | string; // For Data Run / Ritual
+  customData?: {
+    wallX?: number; // For Firewall (Deprecated but type safety)
+    wallSpeed?: number;
+    backupWeapons?: Weapon[]; // For Weapon Override
+    spawned?: boolean;
+    uploadTimer?: number; // Added for delay
+    cloneOffset?: Vector2; // For Entanglement
+    cloneAlive?: boolean; // For Entanglement
+    filterSafeZoneId?: string; // For Great Filter
+  };
 }
 
 export interface WaveConfig {
-    id: number;
-    spawnRate: number;
-    types: EnemyType[];
-    missionType: MissionType;
-    missionParam: number; // Duration (Survive), Count (Eliminate), 0 (Data/Boss)
-    boss?: EnemyType;
+  id: number;
+  spawnRate: number;
+  types: EnemyType[];
+  missionType: MissionType;
+  missionParam: number; // Duration (Survive), Count (Eliminate), 0 (Data/Boss)
+  boss?: EnemyType;
 }
 
 export type GameStatus = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER' | 'LEVEL_UP' | 'VICTORY' | 'COMPENDIUM' | 'MISSION_COMPLETE' | 'AUGMENT_SELECT';

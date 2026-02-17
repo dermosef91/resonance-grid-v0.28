@@ -54,11 +54,11 @@ export const updateProjectiles = (
         if (head.duration > 178) {
             for (let i = 10; i < voidWakeNodes.length; i++) {
                 const tail = voidWakeNodes[i];
-                const distSq = (head.pos.x - tail.pos.x)**2 + (head.pos.y - tail.pos.y)**2;
-                const collisionThreshold = (head.radius + tail.radius) * 0.8; 
-                
+                const distSq = (head.pos.x - tail.pos.x) ** 2 + (head.pos.y - tail.pos.y) ** 2;
+                const collisionThreshold = (head.radius + tail.radius) * 0.8;
+
                 if (distSq < collisionThreshold * collisionThreshold) {
-                    const loopNodes = voidWakeNodes.slice(0, i + 1); 
+                    const loopNodes = voidWakeNodes.slice(0, i + 1);
                     const polygon = loopNodes.map(n => ({ x: n.pos.x, y: n.pos.y }));
                     enemies.forEach(e => {
                         if (!e.markedForDeletion && isPointInPolygon(e.pos, polygon)) {
@@ -77,6 +77,33 @@ export const updateProjectiles = (
         }
     }
 
+    // --- GRAVITATIONAL WELL AUGMENT ---
+    // Iterate Void Wake nodes to pull enemies
+    if (voidWakeNodes.length > 0) {
+        // Optimization: Only check if augment is active on the weapon
+        const voidWakeWeapon = player.weapons.find(w => w.id === 'void_wake');
+        if (voidWakeWeapon && voidWakeWeapon.augment === 'GRAVITATIONAL_WELL') {
+            const PULL_RADIUS_SQ = 150 * 150;
+            const PULL_FORCE = 0.8;
+
+            voidWakeNodes.forEach(node => {
+                // Simple check against all enemies (Optimizable with spatial hash if needed)
+                enemies.forEach(e => {
+                    if (e.markedForDeletion) return;
+                    const dx = node.pos.x - e.pos.x;
+                    const dy = node.pos.y - e.pos.y;
+                    const distSq = dx * dx + dy * dy;
+
+                    if (distSq < PULL_RADIUS_SQ && distSq > 100) { // Don't pull if on top
+                        const dist = Math.sqrt(distSq);
+                        e.pos.x += (dx / dist) * PULL_FORCE;
+                        e.pos.y += (dy / dist) * PULL_FORCE;
+                    }
+                });
+            });
+        }
+    }
+
     projectiles.forEach(p => {
         // If Frozen, skip movement/updates for Enemy Projectiles
         if (isFrozen && p.isEnemy) return;
@@ -84,11 +111,11 @@ export const updateProjectiles = (
         // --- FRACTAL TRAIL EMITTER (Julia's Grasp) ---
         if (p.sourceWeaponId === 'fractal_trail_emitter') {
             p.pos = { ...player.pos }; // Stick to player
-            
+
             // Spawn field element every 30 frames
             if (p.duration % 30 === 0) {
                 const data = p.customData;
-                
+
                 // Fade out ALL existing trail segments to 50% of current opacity
                 projectiles.forEach(existing => {
                     if (existing.sourceWeaponId === 'fractal_bloom' && existing.customData?.augment === 'JULIAS_GRASP') {
@@ -128,11 +155,11 @@ export const updateProjectiles = (
                     mineData: {
                         isMine: true, explosionRadius: 0, pullRadius: 0, lingers: true
                     },
-                    customData: { 
+                    customData: {
                         augment: 'JULIAS_GRASP',
                         maxDuration: data.spawnDuration || 100, // Necessary for animation
                         opacityMultiplier: 1.0 // Start full opacity
-                    } 
+                    }
                 }));
             }
         }
@@ -141,18 +168,18 @@ export const updateProjectiles = (
         if (p.sourceWeaponId === 'fractal_bloom' && p.customData?.augment === 'RECURSIVE_SPLIT') {
             const maxDur = p.customData.maxDuration || 180;
             const progress = 1 - (p.duration / maxDur);
-            
+
             // Growth Curve (Exponential)
             const growth = 1 + (progress * 2.0); // 1x to 3x size
             const baseR = p.customData.baseRadius || 100;
-            
+
             p.radius = baseR * growth;
-            
+
             // Increase complexity visual
             if (p.fractalData) {
                 p.fractalData.recursionDepth = 2 + Math.floor(progress * 3); // 2 -> 5
             }
-            
+
             // Pull Enemies (Simulate Accretion)
             if (p.mineData) p.mineData.pullRadius = p.radius * 1.5;
         }
@@ -165,23 +192,23 @@ export const updateProjectiles = (
                 // Add unique grid-warping shockwaves for augments
                 if (p.customData?.augment === 'SUPERNOVA') {
                     // Soft, wide pulse for Supernova
-                    result.newShockwaves.push({ 
-                        id: Math.random().toString(), 
-                        pos: { ...p.pos }, 
-                        time: 0, 
-                        maxDuration: 45, 
-                        maxRadius: 450 * player.stats.areaMult, 
-                        strength: 50 
+                    result.newShockwaves.push({
+                        id: Math.random().toString(),
+                        pos: { ...p.pos },
+                        time: 0,
+                        maxDuration: 45,
+                        maxRadius: 450 * player.stats.areaMult,
+                        strength: 50
                     });
                 } else if (p.customData?.augment === 'ENTROPY_FIELD') {
                     // Sharper, tighter distortion for Entropy Field
-                    result.newShockwaves.push({ 
-                        id: Math.random().toString(), 
-                        pos: { ...p.pos }, 
-                        time: 0, 
-                        maxDuration: 30, 
-                        maxRadius: 350 * player.stats.areaMult, 
-                        strength: 70 
+                    result.newShockwaves.push({
+                        id: Math.random().toString(),
+                        pos: { ...p.pos },
+                        time: 0,
+                        maxDuration: 30,
+                        maxRadius: 350 * player.stats.areaMult,
+                        strength: 70
                     });
                 }
             }
@@ -197,67 +224,67 @@ export const updateProjectiles = (
         if (p.sourceWeaponId === 'fractal_implosion') p.radius += 10;
 
         if (p.sourceWeaponId === 'ancestral_resonance' && p.duration === 20) {
-             result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 50, maxRadius: 400 * player.stats.areaMult, strength: 100 });
-             result.screenShake += 8;
+            result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 50, maxRadius: 400 * player.stats.areaMult, strength: 100 });
+            result.screenShake += 8;
         }
         if (p.sourceWeaponId === 'bass_drop_shockwave' && p.duration === 15) {
-             result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 40, maxRadius: 300 * player.stats.areaMult, strength: 150 });
+            result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 40, maxRadius: 300 * player.stats.areaMult, strength: 150 });
         }
         if (p.sourceWeaponId === 'boss_death_core' && p.duration === 33) {
-             result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 80, maxRadius: 600, strength: 120 });
+            result.newShockwaves.push({ id: Math.random().toString(), pos: { ...p.pos }, time: 0, maxDuration: 80, maxRadius: 600, strength: 120 });
         }
         if (p.sourceWeaponId === 'trinity_arena_pulse') {
-             // Spawn expanding shockwave that only renders outside 900px
-             if (p.duration === 1) { // Trigger once
-                 result.newShockwaves.push({ 
-                     id: Math.random().toString(), 
-                     pos: { ...p.pos }, 
-                     time: 0, 
-                     maxDuration: 200, // Longer duration to travel out
-                     maxRadius: 3000,  // Expand far out
-                     minRadius: 900,   // Only visible/active outside arena
-                     strength: 100,
-                     contracting: true // Inward waves
-                 });
-             }
-             p.markedForDeletion = true;
+            // Spawn expanding shockwave that only renders outside 900px
+            if (p.duration === 1) { // Trigger once
+                result.newShockwaves.push({
+                    id: Math.random().toString(),
+                    pos: { ...p.pos },
+                    time: 0,
+                    maxDuration: 200, // Longer duration to travel out
+                    maxRadius: 3000,  // Expand far out
+                    minRadius: 900,   // Only visible/active outside arena
+                    strength: 100,
+                    contracting: true // Inward waves
+                });
+            }
+            p.markedForDeletion = true;
         }
 
         if (p.sourceWeaponId === 'spirit_lance' && frame % 2 === 0) {
             const isPhaseDrill = p.customData?.augment === 'PHASE_DRILL';
-            result.newParticles.push(getVisualParticle({ 
-                id: Math.random().toString(), 
-                type: EntityType.VISUAL_PARTICLE, 
-                pos: { x: p.pos.x + (Math.random() - 0.5) * 6, y: p.pos.y + (Math.random() - 0.5) * 6 }, 
-                velocity: { x: 0, y: 0 }, 
-                radius: 1, 
-                color: isPhaseDrill ? '#AA00FF' : (Math.random() > 0.5 ? '#E0FFFF' : '#00FFFF'), 
-                markedForDeletion: false, 
-                life: 10 + Math.random() * 10, 
-                maxLife: 20, 
-                size: Math.random() * 3 + 2, 
-                decay: 0.9 
+            result.newParticles.push(getVisualParticle({
+                id: Math.random().toString(),
+                type: EntityType.VISUAL_PARTICLE,
+                pos: { x: p.pos.x + (Math.random() - 0.5) * 6, y: p.pos.y + (Math.random() - 0.5) * 6 },
+                velocity: { x: 0, y: 0 },
+                radius: 1,
+                color: isPhaseDrill ? '#AA00FF' : (Math.random() > 0.5 ? '#E0FFFF' : '#00FFFF'),
+                markedForDeletion: false,
+                life: 10 + Math.random() * 10,
+                maxLife: 20,
+                size: Math.random() * 3 + 2,
+                decay: 0.9
             }));
         }
 
         if (p.sourceWeaponId === 'drum_laser') {
-             // Laser Particle Trail
-             if (Math.random() < 0.5) {
-                 result.newParticles.push(getVisualParticle({
-                     id: Math.random().toString(), 
-                     type: EntityType.VISUAL_PARTICLE, 
-                     pos: { x: p.pos.x - p.velocity.x * 0.3 + (Math.random()-0.5)*2, y: p.pos.y - p.velocity.y * 0.3 + (Math.random()-0.5)*2 }, 
-                     velocity: { x: 0, y: 0 }, 
-                     radius: 0, 
-                     color: '#FFAA00', 
-                     markedForDeletion: false, 
-                     life: 8, 
-                     maxLife: 8, 
-                     size: 3, 
-                     decay: 0.9, 
-                     shape: 'SQUARE'
-                 }));
-             }
+            // Laser Particle Trail
+            if (Math.random() < 0.5) {
+                result.newParticles.push(getVisualParticle({
+                    id: Math.random().toString(),
+                    type: EntityType.VISUAL_PARTICLE,
+                    pos: { x: p.pos.x - p.velocity.x * 0.3 + (Math.random() - 0.5) * 2, y: p.pos.y - p.velocity.y * 0.3 + (Math.random() - 0.5) * 2 },
+                    velocity: { x: 0, y: 0 },
+                    radius: 0,
+                    color: '#FFAA00',
+                    markedForDeletion: false,
+                    life: 8,
+                    maxLife: 8,
+                    size: 3,
+                    decay: 0.9,
+                    shape: 'SQUARE'
+                }));
+            }
         }
 
         if (p.paradoxData) {
@@ -277,26 +304,26 @@ export const updateProjectiles = (
                     p.markedForDeletion = true; // End of cycle
                 }
             }
-            
+
             // Calculate Position relative to player
             // Arc moves from -sweep/2 to +sweep/2 relative to baseAngle, SCALED by direction
             // Formula: Base + (Direction * (Phase * Sweep - HalfSweep))
             // Dir 1: Base - Half + Phase*Sweep
             // Dir -1: Base - (-Half + Phase*Sweep) = Base + Half - Phase*Sweep (Reverse direction)
-            
+
             const halfSweep = pd.sweepAngle / 2;
-            const swingDir = pd.swingDir || 1; 
+            const swingDir = pd.swingDir || 1;
             const sweepProgress = (pd.currentPhase * pd.sweepAngle) - halfSweep;
             const currentAngle = pd.baseAngle + (swingDir * sweepProgress);
-            
+
             // YOYO LOGIC: Distance from player varies with phase
             // Ease out/in: Sine curve for natural extension/retraction feel
-            const ease = Math.sin(pd.currentPhase * Math.PI / 2); 
+            const ease = Math.sin(pd.currentPhase * Math.PI / 2);
             const currentDist = pd.armLength * ease;
-            
+
             p.pos.x = player.pos.x + Math.cos(currentAngle) * currentDist;
             p.pos.y = player.pos.y + Math.sin(currentAngle) * currentDist;
-            
+
             // Emit Ghost Trail
             if (frame % 2 === 0) {
                 result.newParticles.push(getVisualParticle({
@@ -320,20 +347,20 @@ export const updateProjectiles = (
             // Emit particle every frame for a solid trail
             // Fallback to checking orbitDuration > 9000 if customData isn't set for some reason
             if (p.customData?.augment === 'ORBITAL_LOCK' || (bd.orbitDuration && bd.orbitDuration > 9000)) {
-                 result.newParticles.push(getVisualParticle({
-                     id: Math.random().toString(),
-                     type: EntityType.VISUAL_PARTICLE,
-                     pos: { x: p.pos.x, y: p.pos.y },
-                     velocity: { x: 0, y: 0 },
-                     radius: 0,
-                     color: '#FFD700', // Gold Trail
-                     markedForDeletion: false,
-                     life: 20,
-                     maxLife: 20,
-                     size: 5, // Increased size
-                     decay: 0.9,
-                     shape: 'SQUARE'
-                 }));
+                result.newParticles.push(getVisualParticle({
+                    id: Math.random().toString(),
+                    type: EntityType.VISUAL_PARTICLE,
+                    pos: { x: p.pos.x, y: p.pos.y },
+                    velocity: { x: 0, y: 0 },
+                    radius: 0,
+                    color: '#FFD700', // Gold Trail
+                    markedForDeletion: false,
+                    life: 20,
+                    maxLife: 20,
+                    size: 5, // Increased size
+                    decay: 0.9,
+                    shape: 'SQUARE'
+                }));
             }
 
             if (bd.state === 'OUT') {
@@ -344,13 +371,13 @@ export const updateProjectiles = (
                 if (bd.distTraveled >= bd.maxDist) {
                     // AUGMENT: FRACTAL_SPLIT (Spawn 3 minis at apex)
                     if (bd.augmented) {
-                        for(let i=0; i<3; i++) {
-                            const angle = bd.initialAngle! + (i-1)*0.5 + Math.PI; // Fan out backwards
+                        for (let i = 0; i < 3; i++) {
+                            const angle = bd.initialAngle! + (i - 1) * 0.5 + Math.PI; // Fan out backwards
                             result.newProjectiles.push(getProjectile({
-                                id: Math.random().toString(), type: EntityType.PROJECTILE, pos: { ...p.pos }, 
-                                velocity: { x: Math.cos(angle)*15, y: Math.sin(angle)*15 }, 
-                                radius: p.radius * 0.5, color: '#FFAA00', markedForDeletion: false, damage: p.damage * 0.5, 
-                                duration: 60, pierce: 999, knockback: 0, isEnemy: false, sourceWeaponId: p.sourceWeaponId 
+                                id: Math.random().toString(), type: EntityType.PROJECTILE, pos: { ...p.pos },
+                                velocity: { x: Math.cos(angle) * 15, y: Math.sin(angle) * 15 },
+                                radius: p.radius * 0.5, color: '#FFAA00', markedForDeletion: false, damage: p.damage * 0.5,
+                                duration: 60, pierce: 999, knockback: 0, isEnemy: false, sourceWeaponId: p.sourceWeaponId
                             }));
                         }
                     }
@@ -365,7 +392,7 @@ export const updateProjectiles = (
             } else if (bd.state === 'ORBIT') {
                 // If duration is massive (ORBITAL_LOCK), it just orbits forever.
                 const isOrbitalLock = bd.orbitDuration && bd.orbitDuration > 9000;
-                
+
                 if (!isOrbitalLock) {
                     bd.orbitTimer = (bd.orbitTimer || 0) - 1;
                 }
@@ -378,10 +405,10 @@ export const updateProjectiles = (
                 if (isOrbitalLock) {
                     // Pseudo-random seed from ID
                     const seed = p.id.charCodeAt(p.id.length - 1) + p.id.charCodeAt(0);
-                    
+
                     // 1. Oscillate radius (Breathing effect)
                     const breatheSpeed = 0.05;
-                    const breatheAmp = 50 * player.stats.areaMult; 
+                    const breatheAmp = 50 * player.stats.areaMult;
                     r += Math.sin(frame * breatheSpeed + seed) * breatheAmp;
 
                     // 2. Secondary radial noise (Chaotic wobble)
@@ -394,7 +421,7 @@ export const updateProjectiles = (
                 const nextAngle = currentAngle + orbitSpeed;
                 p.pos.x = player.pos.x + Math.cos(nextAngle) * r;
                 p.pos.y = player.pos.y + Math.sin(nextAngle) * r;
-                
+
                 if (!isOrbitalLock && (bd.orbitTimer || 0) <= 0) {
                     bd.state = 'RETURN';
                 }
@@ -431,7 +458,7 @@ export const updateProjectiles = (
             const offset = p.customData.thetaOffset || 0;
             const rotSpeed = 0.05;
             const angle = (frame * rotSpeed) + offset;
-            
+
             // Ideal Orbit Position
             const targetX = player.pos.x + Math.cos(angle) * orbitRadius;
             const targetY = player.pos.y + Math.sin(angle) * orbitRadius;
@@ -442,7 +469,7 @@ export const updateProjectiles = (
 
             for (const e of enemies) {
                 if (e.markedForDeletion) continue;
-                const dSq = (e.pos.x - p.pos.x)**2 + (e.pos.y - p.pos.y)**2;
+                const dSq = (e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2;
                 if (dSq < minDistSq) {
                     minDistSq = dSq;
                     attackTarget = e;
@@ -464,10 +491,10 @@ export const updateProjectiles = (
                 const dx = targetX - p.pos.x;
                 const dy = targetY - p.pos.y;
                 const k = 0.08; // Stiffness
-                
+
                 p.velocity.x += dx * k;
                 p.velocity.y += dy * k;
-                
+
                 // Organic Noise
                 p.velocity.x += (Math.random() - 0.5) * 1.0;
                 p.velocity.y += (Math.random() - 0.5) * 1.0;
@@ -482,11 +509,11 @@ export const updateProjectiles = (
             p.pos.y += p.velocity.y;
 
             // Leash to player if too far (e.g. got stuck or knocked far away)
-            const distToPlayerSq = (p.pos.x - player.pos.x)**2 + (p.pos.y - player.pos.y)**2;
-            if (distToPlayerSq > (orbitRadius * 4)**2) {
+            const distToPlayerSq = (p.pos.x - player.pos.x) ** 2 + (p.pos.y - player.pos.y) ** 2;
+            if (distToPlayerSq > (orbitRadius * 4) ** 2) {
                 p.pos.x = targetX;
                 p.pos.y = targetY;
-                p.velocity = {x: 0, y: 0};
+                p.velocity = { x: 0, y: 0 };
             }
 
             p.duration--;
@@ -520,19 +547,15 @@ export const updateProjectiles = (
         }
 
         if (p.duration <= 0) {
-            // AUGMENT: UNSTABLE_GROUND (Explosion on expiry)
+            // AUGMENT: GRAVITATIONAL_WELL (Handled in update loop, no explosion on death)
             if (p.voidWakeData?.explosive) {
-                result.newProjectiles.push(getProjectile({
-                    id: Math.random().toString(), type: EntityType.PROJECTILE, pos: { ...p.pos }, velocity: { x: 0, y: 0 }, 
-                    radius: 30, color: '#FF0055', markedForDeletion: false, damage: p.damage * 2, duration: 10, pierce: 999, knockback: 20, isEnemy: false, sourceWeaponId: 'wake_explode'
-                }));
-                result.newParticles.push(createTextParticle(p.pos, "BOOM", '#FF0055'));
+                // Legacy: Unstable Ground removed.
             }
             if (!p.boomerangData && p.sourceWeaponId !== 'fractal_trail_emitter') p.markedForDeletion = true;
         } else {
             const dX = p.pos.x - player.pos.x; const dY = p.pos.y - player.pos.y;
-            if (dX * dX + dY * dY > cleanupDistSq) { 
-                if (!p.boomerangData && !p.paradoxData && p.sourceWeaponId !== 'fractal_trail_emitter') p.markedForDeletion = true; 
+            if (dX * dX + dY * dY > cleanupDistSq) {
+                if (!p.boomerangData && !p.paradoxData && p.sourceWeaponId !== 'fractal_trail_emitter') p.markedForDeletion = true;
             }
         }
     });
