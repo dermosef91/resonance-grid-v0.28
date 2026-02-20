@@ -2,12 +2,12 @@
 import React, { useCallback, useEffect } from 'react';
 import {
     GameStatus, Player, Enemy, Projectile, Pickup, TextParticle, VisualParticle,
-    Weapon, UpgradeOption, EntityType, EnemyType, MetaState, MissionState, MissionType, MissionEntity, WaveConfig, ColorPalette, TutorialStep, Shockwave, Replica, Obstacle
+    Weapon, UpgradeOption, EntityType, EnemyType, MetaState, MissionState, MissionType, MissionEntity, WaveConfig, ColorPalette, TutorialStep, Shockwave, Replica, Obstacle, GameOverUnlockedItem
 } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE } from '../constants';
 import {
     spawnEnemy, createXP, createCurrency, createHealthPickup, createTimeCrystal, createStasisFieldPickup,
-    createSupplyDrop, createTextParticle, createShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle
+    createSupplyDrop, createTextParticle, createShatterParticles, createPolygonShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle
 } from '../services/gameLogic';
 import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
@@ -27,6 +27,7 @@ import { updateEnemies } from '../services/systems/EnemySystem';
 import { resolveCollisions } from '../services/systems/CollisionSystem';
 import { updatePickups } from '../services/systems/PickupSystem';
 import { initMissionState, updateMission, handleMissionPickup } from '../services/systems/MissionSystem';
+import { createEvolvedDeathEffect } from '../services/renderers/evolvedEffects';
 
 // --- STATE HOOKS ---
 import { useGameState } from './useGameState';
@@ -129,7 +130,7 @@ export const useGameEngine = (
             particlesRef.current.push(...createShatterParticles(playerRef.current.pos, '#FFFFFF', 10, 5));
         } else if (mission.type === MissionType.ENTANGLEMENT) {
             screenShakeRef.current = 15;
-            particlesRef.current.push(createTextParticle(playerRef.current.pos, "QUANTUM ENTANGLEMENT", '#00FFFF', 120));
+            // particlesRef.current.push(createTextParticle(playerRef.current.pos, "QUANTUM ENTANGLEMENT", '#00FFFF', 120));
         } else if (mission.type === MissionType.THE_GREAT_FILTER) {
             audioEngine.setTheme('MIND_FLAYER');
             redFlashTimerRef.current = 120;
@@ -174,8 +175,8 @@ export const useGameEngine = (
         const newBosses: string[] = Array.from(new Set<string>([...metaState.bossesDefeated, ...(Array.from(bossesDefeatedRef.current) as string[])]));
         const wavesWon = waveIndexRef.current;
         const newMaxWave = Math.max(metaState.maxWaveCompleted || 0, wavesWon);
-        const newlyUnlocked: string[] = [];
-        const newAvailable: string[] = [];
+        const newlyUnlocked: GameOverUnlockedItem[] = [];
+        const newAvailable: GameOverUnlockedItem[] = [];
         const nextUnlocked = new Set<string>(metaState.unlockedItems);
         const allItems = [...Object.values(BASE_WEAPONS), ...Object.values(BASE_ARTIFACTS)];
 
@@ -195,10 +196,22 @@ export const useGameEngine = (
                         else if (item.unlockReq.type === 'BOSS') prevReqMet = metaState.bossesDefeated.includes(item.unlockReq.value as string);
                         else if (item.unlockReq.type === 'WAVE') prevReqMet = (metaState.maxWaveCompleted || 0) >= (item.unlockReq.value as number);
                     }
-                    if (!prevReqMet) newAvailable.push(item.id);
+                    if (!prevReqMet) newAvailable.push({
+                        id: item.id,
+                        name: item.name,
+                        description: item.description,
+                        type: (item as any).rarity ? 'ARTIFACT' : 'WEAPON',
+                        rarity: (item as any).rarity
+                    });
                 } else {
                     nextUnlocked.add(item.id);
-                    newlyUnlocked.push(item.id);
+                    newlyUnlocked.push({
+                        id: item.id,
+                        name: item.name,
+                        description: item.description,
+                        type: (item as any).rarity ? 'ARTIFACT' : 'WEAPON',
+                        rarity: (item as any).rarity
+                    });
                 }
             }
         });
@@ -209,7 +222,13 @@ export const useGameEngine = (
             bossesDefeated: newBosses,
             unlockedItems: Array.from(nextUnlocked),
             permanentUpgrades: metaState.permanentUpgrades,
-            maxWaveCompleted: newMaxWave
+            maxWaveCompleted: newMaxWave,
+            personalBests: {
+                maxKills: Math.max(metaState.personalBests?.maxKills || 0, killsRef.current),
+                maxDamage: Math.max(metaState.personalBests?.maxDamage || 0, scoreRef.current), // Using score as proxy for now
+                maxChips: Math.max(metaState.personalBests?.maxChips || 0, sessionCurrencyRef.current),
+                fastestRun: metaState.personalBests?.fastestRun
+            }
         };
 
         trackEvent(runIdRef.current, 'DEATH', playerRef.current, metaState, waveIndexRef.current + 1, sessionCurrencyRef.current, Math.floor(frameRef.current / 60), { causeOfDeath: lastDamageSourceRef.current });
@@ -221,7 +240,16 @@ export const useGameEngine = (
         enemyFreezeTimerRef.current = 0;
         replicaTimerRef.current = 0;
         redFlashTimerRef.current = 0;
-        setGameOverInfo({ score: scoreRef.current, level: playerRef.current.level, wave: waveIndexRef.current + 1, chipsEarned: sessionCurrencyRef.current, newUnlocks: newlyUnlocked, newAvailable: newAvailable });
+        setGameOverInfo({
+            score: scoreRef.current,
+            level: playerRef.current.level,
+            wave: waveIndexRef.current + 1,
+            kills: killsRef.current,
+            duration: Math.floor(frameRef.current / 60),
+            chipsEarned: sessionCurrencyRef.current,
+            newUnlocks: newlyUnlocked,
+            newAvailable: newAvailable
+        });
         setStatus('GAME_OVER');
         audioEngine.stop();
     }, [metaState, setMetaState]);
@@ -308,12 +336,12 @@ export const useGameEngine = (
                     });
 
                     addEnemies(spawnedParts);
-                    particlesRef.current.push(createTextParticle(playerRef.current.pos, "WARNING: TRINITY DETECTED", '#ff0000', 120));
+                    // particlesRef.current.push(createTextParticle(playerRef.current.pos, "WARNING: TRINITY DETECTED", '#ff0000', 120));
 
                 } else {
                     // Standard Single Boss
                     addEnemies([spawnEnemy(playerRef.current, nextWave.boss, undefined, waveIndexRef.current + 1)]);
-                    particlesRef.current.push(createTextParticle(playerRef.current.pos, "WARNING: ANOMALY DETECTED", '#ff0000', 120));
+                    // particlesRef.current.push(createTextParticle(playerRef.current.pos, "WARNING: ANOMALY DETECTED", '#ff0000', 120));
                 }
             }
         }
@@ -334,6 +362,8 @@ export const useGameEngine = (
         const currentWave = runWaves[Math.min(waveIndexRef.current, runWaves.length - 1)];
 
         // --- REPLICA LOGIC ---
+        // --- REPLICA LOGIC ---
+        // 1. Handle Time Crystal (Clone Powerup) Spawning
         if (replicaTimerRef.current > 0) {
             replicaTimerRef.current--;
             if (replicaTimerRef.current % 30 === 0) {
@@ -349,9 +379,10 @@ export const useGameEngine = (
                     rotation: player.rotation,
                     weapons: player.weapons.map((w: any) => ({ ...w, customData: w.customData ? { ...w.customData } : undefined })),
                     stats: { ...player.stats },
-                    lifeTime: replicaTimerRef.current
+                    lifeTime: 600 // Fixed lifetime for clones
                 };
 
+                // Visual trail for spawn
                 if (prevReplica) {
                     const dist = Math.sqrt((newReplica.pos.x - prevReplica.pos.x) ** 2 + (newReplica.pos.y - prevReplica.pos.y) ** 2);
                     const steps = Math.ceil(dist / 15);
@@ -367,8 +398,102 @@ export const useGameEngine = (
                 }
                 replicasRef.current.push(newReplica);
             }
-        } else {
-            if (replicasRef.current.length > 0) replicasRef.current = [];
+        }
+
+        // 2. Update All Replicas (Allies & Clones)
+        if (replicasRef.current.length > 0) {
+            replicasRef.current.forEach((r: any) => {
+                r.lifeTime--;
+                if (r.lifeTime <= 0) r.markedForDeletion = true;
+
+                if (r.isAlly && r.formationOffset) {
+                    // Formation Movement
+                    const cos = Math.cos(player.rotation);
+                    const sin = Math.sin(player.rotation);
+
+                    const fwdX = Math.cos(player.rotation);
+                    const fwdY = Math.sin(player.rotation);
+                    const rightX = Math.cos(player.rotation + Math.PI / 2);
+                    const rightY = Math.sin(player.rotation + Math.PI / 2);
+
+                    const formTargetX = player.pos.x + (rightX * r.formationOffset.x) + (fwdX * r.formationOffset.y);
+                    const formTargetY = player.pos.y + (rightY * r.formationOffset.x) + (fwdY * r.formationOffset.y);
+
+                    if (r.isSpectral) {
+                        // Autonomous Flight
+                        let targetX = formTargetX;
+                        let targetY = formTargetY;
+                        let speedFactor = 0.08;
+
+                        if (missionRef.current.isComplete) {
+                            r.departing = true;
+                        }
+
+                        if (r.departing) {
+                            const dirX = r.pos.x - player.pos.x;
+                            const dirY = r.pos.y - player.pos.y;
+                            const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+                            targetX = r.pos.x + (dirX / len) * 2000;
+                            targetY = r.pos.y + (dirY / len) * 2000;
+                            speedFactor = 0.05;
+                        }
+
+                        const dx = targetX - r.pos.x;
+                        const dy = targetY - r.pos.y;
+                        r.pos.x += dx * speedFactor;
+                        r.pos.y += dy * speedFactor;
+
+                        const velSq = dx * dx * speedFactor * speedFactor + dy * dy * speedFactor * speedFactor;
+                        if (velSq > 1 || r.departing) {
+                            const targetRot = Math.atan2(dy, dx) + Math.PI / 2;
+                            let diff = targetRot - r.rotation;
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            while (diff < -Math.PI) diff += Math.PI * 2;
+                            r.rotation += diff * 0.15;
+                        }
+
+                        const phase = (parseInt(r.id.slice(-4), 16) || 0) % 100;
+                        r.pos.x += Math.sin(frameRef.current * 0.05 + phase) * 0.5;
+                        r.pos.y += Math.cos(frameRef.current * 0.05 + phase) * 0.5;
+
+                        if (frameRef.current % 4 === 0) {
+                            particlesRef.current.push(getVisualParticle({
+                                id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                                pos: { ...r.pos },
+                                velocity: { x: (Math.random() - 0.5), y: (Math.random() - 0.5) },
+                                radius: 0, color: r.color, markedForDeletion: false,
+                                life: 15, maxLife: 15, size: 3, decay: 0.8, shape: 'CIRCLE'
+                            }));
+                        }
+
+                        if (r.departing) {
+                            const distP = (r.pos.x - player.pos.x) ** 2 + (r.pos.y - player.pos.y) ** 2;
+                            if (distP > 2500 * 2500) r.markedForDeletion = true;
+                        }
+
+                    } else {
+                        // Standard Clone Behavior (Rigid)
+                        r.pos.x += (formTargetX - r.pos.x) * 0.1;
+                        r.pos.y += (formTargetY - r.pos.y) * 0.1;
+                        r.rotation = player.rotation;
+                    }
+
+                    particlesRef.current.push(getVisualParticle({
+                        id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                        pos: { ...r.pos },
+                        velocity: { x: (Math.random() - 0.5), y: (Math.random() - 0.5) },
+                        radius: 0, color: r.color, markedForDeletion: false,
+                        life: 15, maxLife: 15, size: 3, decay: 0.8, shape: 'CIRCLE'
+                    }));
+                }
+
+                if (missionRef.current.isComplete) {
+                    const distP = (r.pos.x - player.pos.x) ** 2 + (r.pos.y - player.pos.y) ** 2;
+                    if (distP > 2000 * 2000) r.markedForDeletion = true;
+                }
+            });
+            // Cleanup
+            replicasRef.current = replicasRef.current.filter((r: any) => !r.markedForDeletion);
         }
 
         // --- OBSTACLE SPAWNING ---
@@ -470,6 +595,7 @@ export const useGameEngine = (
         const missionResult = updateMission(missionRef.current, player, missionEntitiesRef.current, enemiesRef.current, waveTimerRef.current, representativeBoss, bossesDefeatedRef.current, currentWave.boss, waveIndexRef.current + 1, projectilesRef.current, pickupsRef.current);
         missionRef.current = missionResult.mission;
         addEnemies(missionResult.newEnemies);
+        if (missionResult.newReplicas) replicasRef.current.push(...missionResult.newReplicas); // Add new replicas
 
         if (missionResult.screenShake) screenShakeRef.current = Math.max(screenShakeRef.current, missionResult.screenShake);
 
@@ -498,7 +624,7 @@ export const useGameEngine = (
 
                 let text = "MISSION COMPLETE"; let color = '#00FF00';
                 if (missionRef.current.type === MissionType.ENTANGLEMENT && missionRef.current.customData?.cloneAlive === false) { text = "MISSION FAILED"; color = '#FF0000'; }
-                particlesRef.current.push(createTextParticle(player.pos, text, color, 120));
+                // particlesRef.current.push(createTextParticle(player.pos, text, color, 120));
                 if (mission.type === MissionType.THE_GREAT_FILTER) audioEngine.restoreWaveTheme();
             }
             missionCompleteTimerRef.current++;
@@ -584,7 +710,7 @@ export const useGameEngine = (
                     if (checkCollision(clone, enemy)) {
                         missionRef.current.customData = { ...missionRef.current.customData, cloneAlive: false };
                         particlesRef.current.push(...createShatterParticles(clone.pos, '#00FFFF', 15, 20));
-                        particlesRef.current.push(createTextParticle(clone.pos, "LINK LOST", '#FF0000', 90));
+                        // particlesRef.current.push(createTextParticle(clone.pos, "LINK LOST", '#FF0000', 90));
                         screenShakeRef.current += 10;
                         clone.markedForDeletion = true;
                         missionEntitiesRef.current = missionEntitiesRef.current.filter((e: any) => e.id !== clone.id);
@@ -596,7 +722,7 @@ export const useGameEngine = (
                         if (checkCollision(clone, proj)) {
                             missionRef.current.customData = { ...missionRef.current.customData, cloneAlive: false };
                             particlesRef.current.push(...createShatterParticles(clone.pos, '#00FFFF', 15, 20));
-                            particlesRef.current.push(createTextParticle(clone.pos, "LINK LOST", '#FF0000', 90));
+                            // particlesRef.current.push(createTextParticle(clone.pos, "LINK LOST", '#FF0000', 90));
                             screenShakeRef.current += 10;
                             clone.markedForDeletion = true; proj.markedForDeletion = true;
                             missionEntitiesRef.current = missionEntitiesRef.current.filter((e: any) => e.id !== clone.id);
@@ -614,6 +740,25 @@ export const useGameEngine = (
             if (replicasRef.current.length > 0) {
                 replicasRef.current.forEach((replica: any) => {
                     const replicaProjs = updateWeapons(replica, enemiesRef.current, projectilesRef.current, (p) => particlesRef.current.push(p));
+                    if (replicaProjs.length > 0 && replica.isSpectral) {
+                        // Muzzle Flash
+                        const muzzleDist = 15;
+                        const mx = replica.pos.x + Math.cos(replica.rotation) * muzzleDist;
+                        const my = replica.pos.y + Math.sin(replica.rotation) * muzzleDist;
+                        particlesRef.current.push(getVisualParticle({
+                            id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                            pos: { x: mx, y: my }, velocity: { x: 0, y: 0 },
+                            radius: 0, color: '#FFFFFF', markedForDeletion: false,
+                            life: 4, maxLife: 4, size: 20, decay: 0, shape: 'CIRCLE',
+                            lightColor: replica.color, lightRadius: 60
+                        }));
+                        particlesRef.current.push(getVisualParticle({
+                            id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                            pos: { x: mx, y: my }, velocity: { x: 0, y: 0 },
+                            radius: 0, color: replica.color, markedForDeletion: false,
+                            life: 8, maxLife: 8, size: 10, decay: 0.2, shape: 'CIRCLE'
+                        }));
+                    }
                     projectilesRef.current.push(...replicaProjs);
                 });
             }
@@ -625,7 +770,28 @@ export const useGameEngine = (
         // Process collisions with obstacles here implicitly via system or explicitly?
         // CollisionSystem now handles it. Just make sure arguments are passed.
 
-        const colResult = resolveCollisions(player, projectilesRef.current, grid, enemiesRef.current, obstaclesRef.current);
+        // --- GATHER BARRIER PROJECTILES AS OBSTACLES ---
+        const barrierProjectiles = projectilesRef.current.filter(p => p.customData?.isBarrier);
+        let activeObstacles = obstaclesRef.current;
+
+        if (barrierProjectiles.length > 0) {
+            const barriers: Obstacle[] = barrierProjectiles.map(p => ({
+                id: p.id,
+                type: EntityType.OBSTACLE,
+                pos: p.pos,
+                velocity: { x: 0, y: 0 },
+                radius: p.radius * 2, // Make the wall slightly thicker than the projectile
+                markedForDeletion: false,
+                color: '#00FFFF',
+                shape: 'CYLINDER',
+                height: 100,
+                rotationSpeed: 0,
+                rotation: 0
+            }));
+            activeObstacles = [...obstaclesRef.current, ...barriers];
+        }
+
+        const colResult = resolveCollisions(player, projectilesRef.current, grid, enemiesRef.current, activeObstacles, missionEntitiesRef.current);
 
         projectilesRef.current.push(...projResult.newProjectiles);
         projectilesRef.current.push(...colResult.newProjectiles);
@@ -635,7 +801,7 @@ export const useGameEngine = (
         screenShakeRef.current += projResult.screenShake;
         shockwavesRef.current.push(...projResult.newShockwaves);
 
-        const enemyResult = updateEnemies(enemiesRef.current, player, frameRef.current, grid, isFrozen, obstaclesRef.current);
+        const enemyResult = updateEnemies(enemiesRef.current, player, frameRef.current, grid, isFrozen, activeObstacles);
         addEnemies(enemyResult.newEnemies); enemyResult.newEnemies.forEach(e => grid.add(e));
         projectilesRef.current.push(...enemyResult.newProjectiles); particlesRef.current.push(...enemyResult.newParticles);
         if (enemyResult.screenShake) screenShakeRef.current += enemyResult.screenShake;
@@ -660,9 +826,9 @@ export const useGameEngine = (
             } else if (p.kind === 'CURRENCY') {
                 const amount = Math.floor(p.value * player.stats.currencyMult); sessionCurrencyRef.current += amount; particlesRef.current.push(createTextParticle(player.pos, `+${amount} ◆`, '#FFD700'));
             } else if (p.kind === 'TIME_CRYSTAL') {
-                replicaTimerRef.current = 480; replicasRef.current = []; particlesRef.current.push(createTextParticle(player.pos, "REPLICAS ONLINE", '#00FFFF', 90)); screenShakeRef.current += 10;
+                replicaTimerRef.current = 480; replicasRef.current = []; // particlesRef.current.push(createTextParticle(player.pos, "REPLICAS ONLINE", '#00FFFF', 90)); screenShakeRef.current += 10;
             } else if (p.kind === 'STASIS_FIELD') {
-                enemyFreezeTimerRef.current = 300; particlesRef.current.push(createTextParticle(player.pos, "STASIS FIELD", '#0000FF', 90)); screenShakeRef.current += 15;
+                enemyFreezeTimerRef.current = 300; // particlesRef.current.push(createTextParticle(player.pos, "STASIS FIELD", '#0000FF', 90)); screenShakeRef.current += 15;
             } else if (p.kind === 'SUPPLY_DROP') {
                 trackEvent(runIdRef.current, 'LOOT_PICKUP', player, metaState, waveIndexRef.current + 1, sessionCurrencyRef.current, Math.floor(frameRef.current / 60), { lootType: p.supplyContent || 'LEVEL_UP' });
                 const content = p.supplyContent || 'LEVEL_UP';
@@ -694,13 +860,32 @@ export const useGameEngine = (
         enemiesRef.current = enemiesRef.current.filter((e: Enemy) => {
             if (e.health <= 0) {
                 scoreRef.current += e.xpValue * 10; killsRef.current++; audioEngine.playEnemyDeath();
-                if (missionCompleteTimerRef.current === 0) pickupsRef.current.push(createXP(e.pos, e.xpValue));
-                if (e.deathColor && missionCompleteTimerRef.current === 0) {
-                    if (e.deathColor === 'RED') pickupsRef.current.push(createHealthPickup(e.pos));
-                    else if (e.deathColor === 'GREEN') pickupsRef.current.push(createXP(e.pos, e.xpValue * 5));
-                    else if (e.deathColor === 'BLUE') pickupsRef.current.push(createCurrency(e.pos, 5));
+
+                // Drop Logic (Skip if flag set)
+                if (!e.skipDrop) {
+                    if (missionCompleteTimerRef.current === 0) pickupsRef.current.push(createXP(e.pos, e.xpValue));
+                    if (e.deathColor && missionCompleteTimerRef.current === 0) {
+                        if (e.deathColor === 'RED') pickupsRef.current.push(createHealthPickup(e.pos));
+                        else if (e.deathColor === 'GREEN') pickupsRef.current.push(createXP(e.pos, e.xpValue * 5));
+                        else if (e.deathColor === 'BLUE') pickupsRef.current.push(createCurrency(e.pos, 5));
+                    }
                 }
-                particlesRef.current.push(...createShatterParticles(e.pos, e.color, 5, e.radius));
+
+                if (e.enemyType !== EnemyType.GHOST && e.enemyType !== EnemyType.BINARY_SENTINEL) {
+                    particlesRef.current.push(...createPolygonShatterParticles(e));
+                }
+
+                // --- EVOLVED WEAPON DEATH VFX ---
+                const killerWeaponId = (e as any).killedByWeaponId;
+                if (killerWeaponId) {
+                    const evolvedWeapon = playerRef.current.weapons.find((w: Weapon) => w.id === killerWeaponId && w.level >= 8);
+                    if (evolvedWeapon) {
+                        const evolvedFx = createEvolvedDeathEffect(e.pos, killerWeaponId, e.radius);
+                        particlesRef.current.push(...evolvedFx.particles);
+                        screenShakeRef.current += evolvedFx.screenShake;
+                        if (evolvedFx.shockwave) shockwavesRef.current.push(evolvedFx.shockwave);
+                    }
+                }
                 if ((mission.type === MissionType.ELIMINATE) && e.isMissionTarget) { missionRef.current.progress++; particlesRef.current.push(createTextParticle(e.pos, "TARGET ELIMINATED", '#FF0000', 45)); }
                 dropsCounterRef.current++;
                 if (dropsCounterRef.current > 50) { dropsCounterRef.current = 0; if (missionCompleteTimerRef.current === 0) pickupsRef.current.push(createCurrency(e.pos, 10)); }
@@ -783,8 +968,13 @@ export const useGameEngine = (
         });
         particlesRef.current = keptParticles;
 
+        // Cleanup Mission Entities
+        missionEntitiesRef.current = missionEntitiesRef.current.filter((e: any) => !e.markedForDeletion);
+
         setActiveBosses(currentBosses);
-        setUiStats({ health: player.health, maxHealth: player.maxHealth, level: player.level, xp: player.xp, nextXp: player.nextLevelXp, score: scoreRef.current, currency: sessionCurrencyRef.current, runTime: Math.floor(frameRef.current / 60) });
+        if (frameRef.current % 15 === 0) {
+            setUiStats({ health: player.health, maxHealth: player.maxHealth, level: player.level, xp: player.xp, nextXp: player.nextLevelXp, score: scoreRef.current, currency: sessionCurrencyRef.current, runTime: Math.floor(frameRef.current / 60) });
+        }
         setWaveInfo({ id: currentWave.id, boss: currentWave.boss, mission: { ...missionRef.current } });
         setInventory([...player.weapons]);
         setArtifacts([...player.artifacts]);
@@ -822,13 +1012,16 @@ export const useGameEngine = (
                 if (ctx) {
                     let targets: { pos: { x: number, y: number }, color: string, label?: string }[] = [];
                     const m = missionRef.current;
-                    if (m.type === MissionType.ELIMINATE) { enemiesRef.current.forEach((e: any) => { if (e.isMissionTarget) targets.push({ pos: e.pos, color: '#ff0000' }); }); }
-                    else if (m.type === MissionType.DATA_RUN && m.targetIds) { pickupsRef.current.forEach((p: any) => { if (m.targetIds?.includes(p.id)) targets.push({ pos: p.pos, color: p.kind === 'MISSION_ZONE' ? '#00FF00' : '#00FFFF' }); }); }
-                    else if (m.type === MissionType.KING_OF_THE_HILL || m.type === MissionType.PAYLOAD_ESCORT || m.type === MissionType.RITUAL_CIRCLE || m.type === MissionType.ENTANGLEMENT || m.type === MissionType.THE_GREAT_FILTER) {
+                    if (m.type === MissionType.ELIMINATE || m.type === MissionType.RESCUE) { enemiesRef.current.forEach((e: any) => { if (e.isMissionTarget) targets.push({ pos: e.pos, color: '#ff0000' }); }); }
+                    if (m.type === MissionType.DATA_RUN && m.targetIds) { pickupsRef.current.forEach((p: any) => { if (m.targetIds?.includes(p.id)) targets.push({ pos: p.pos, color: p.kind === 'MISSION_ZONE' ? '#00FF00' : '#00FFFF' }); }); }
+                    if (m.type === MissionType.KING_OF_THE_HILL || m.type === MissionType.PAYLOAD_ESCORT || m.type === MissionType.RITUAL_CIRCLE || m.type === MissionType.ENTANGLEMENT || m.type === MissionType.THE_GREAT_FILTER || m.type === MissionType.RESCUE) {
                         missionEntitiesRef.current.forEach((e: any) => {
                             if (m.type === MissionType.RITUAL_CIRCLE && e.kind === 'OBELISK' && e.active) return;
                             if (m.type === MissionType.PAYLOAD_ESCORT && e.kind === 'STATION') return;
                             if (m.type === MissionType.ENTANGLEMENT && e.kind === 'CLONE') return;
+
+                            // For Rescue, only point to Allies
+                            if (m.type === MissionType.RESCUE && e.kind !== 'ALLY') return;
 
                             let color = e.color;
                             let label: string | undefined;
@@ -857,7 +1050,7 @@ export const useGameEngine = (
 
                     renderGame(
                         ctx, canvasRef.current.width, canvasRef.current.height, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
-                        targets, missionEntitiesRef.current, undefined, { current: missionRef.current.progress, total: missionRef.current.total }, missionRef.current.type,
+                        targets, missionEntitiesRef.current, undefined, missionRef.current, missionRef.current.type,
                         glitchIntensityRef.current, currentPaletteRef.current, tutorialPickup, shockwavesRef.current, replicasRef.current, enemyFreezeTimerRef.current > 0, redFlashTimerRef.current,
                         obstaclesRef.current, waveIndexRef.current + 1 // Pass Obstacles + current Wave ID (1-based)
                     );

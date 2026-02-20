@@ -82,6 +82,19 @@ const App: React.FC = () => {
     }
   }, [status]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        document.body.classList.add('no-cursor');
+      } else {
+        document.body.classList.remove('no-cursor');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   return (
     <>
       <canvas
@@ -127,6 +140,7 @@ const App: React.FC = () => {
         <LevelUpScreen
           options={levelUpOptions}
           onSelect={selectUpgrade}
+          metaState={metaState}
           title={isMissionReward && waveInfo.mission ? `MISSION COMPLETE: ${waveInfo.mission.description}` : undefined}
         />
       )}
@@ -151,8 +165,11 @@ const App: React.FC = () => {
           score={gameOverInfo.score}
           level={gameOverInfo.level}
           wave={gameOverInfo.wave}
+          kills={gameOverInfo.kills}
+          duration={gameOverInfo.duration}
           chipsEarned={gameOverInfo.chipsEarned}
           currency={metaState.currency}
+          metaState={metaState}
           newUnlocks={gameOverInfo.newUnlocks}
           newAvailable={gameOverInfo.newAvailable}
           onRestart={startGame}

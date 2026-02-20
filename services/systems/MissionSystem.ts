@@ -1,18 +1,20 @@
 
 import {
     MissionState, MissionType, WaveConfig, Player, MissionEntity, Pickup, Enemy,
-    EnemyType, EntityType, Vector2, Weapon, Projectile, VisualParticle, TextParticle
+    EnemyType, EntityType, Vector2, Weapon, Projectile, VisualParticle, TextParticle, Replica
 } from '../../types';
 import {
-    createMissionEntity, createMissionPickup, spawnEnemy, createTextParticle, createCurrency, createShatterParticles
+    createMissionEntity, createMissionPickup, spawnEnemy, createTextParticle, createCurrency, createShatterParticles, createPolygonShatterParticles, createAllyReplica
 } from '../gameLogic';
 import { getVisualParticle } from '../objectPools';
+import { audioEngine } from '../audioEngine';
 
 export interface MissionUpdateResult {
     mission: MissionState;
     isComplete: boolean;
     newEnemies: Enemy[]; // Fully formed enemies ready to add
     newParticles: (VisualParticle | { pos: Vector2, text: string, color: string, duration?: number })[];
+    newReplicas?: Replica[]; // Added Replicas
     screenShake?: number;
 }
 
@@ -200,6 +202,55 @@ export const initMissionState = (wave: WaveConfig, player: Player): { mission: M
         singularity.radius = 40;
         entities.push(singularity);
         m.targetIds = [singularity.id];
+    } else if (m.type === MissionType.SOLAR_STORM) {
+        m.total = wave.missionParam || 30; // Duration in seconds (Halved)
+        m.description = "SURVIVE THE SOLAR STORM";
+
+        // Initialize Solar Data
+        m.customData = {
+            solarData: {
+                state: 'CALM',
+                timer: 60, // 1s initial calm (reduced from 10s)
+                sunAngle: Math.random() * Math.PI * 2, // Random direction for the sun
+                intensity: 0
+            }
+        };
+
+        // Spawn Solar Shields
+        const shieldCount = 5;
+        const shieldDist = 800;
+        for (let i = 0; i < shieldCount; i++) {
+            const angle = (Math.PI * 2 / shieldCount) * i;
+            const pos = {
+                x: player.pos.x + Math.cos(angle) * shieldDist,
+                y: player.pos.y + Math.sin(angle) * shieldDist
+            };
+            entities.push(createMissionEntity(pos, 'SOLAR_SHIELD'));
+        }
+    } else if (m.type === MissionType.RESCUE) {
+        m.total = 4; // 4 Allies to save (Quadrants)
+        m.description = "RESCUE TRAPPED ALLIES";
+        m.customData = {
+            allyGuards: {} // allyId -> guardId[]
+        };
+
+        const allyCount = 4;
+        const classes: ('ASSAULT' | 'SUPPORT')[] = ['ASSAULT', 'SUPPORT', 'ASSAULT', 'SUPPORT'];
+
+        for (let i = 0; i < allyCount; i++) {
+            // Quadrants: 45, 135, 225, 315 degrees
+            const angle = (Math.PI / 4) + (Math.PI / 2) * i;
+            const dist = 1400; // Further out
+            const allyPos = {
+                x: player.pos.x + Math.cos(angle) * dist,
+                y: player.pos.y + Math.sin(angle) * dist
+            };
+            const ally = createMissionEntity(allyPos, 'ALLY');
+            ally.customData = { allyClass: classes[i] }; // Persist class
+            entities.push(ally);
+        }
+        // Mark for initial guard spawn
+        m.customData.needsSpawn = true;
     }
 
     return { mission: m, entities, pickups };
@@ -222,7 +273,9 @@ export const updateMission = (
         mission: { ...mission },
         isComplete: mission.isComplete,
         newEnemies: [],
+
         newParticles: [],
+        newReplicas: [],
         screenShake: 0
     };
 
@@ -243,7 +296,7 @@ export const updateMission = (
             elite.health *= 2;
             elite.maxHealth *= 2;
             result.newEnemies.push(elite);
-            result.newParticles.push({ pos: elite.pos, text: "TARGET", color: '#FF0000', duration: 90 });
+            // result.newParticles.push({ pos: elite.pos, text: "TARGET", color: '#FF0000', duration: 90 });
         }
     }
     else if (mission.type === MissionType.DATA_RUN) {
@@ -254,7 +307,7 @@ export const updateMission = (
                 result.mission.customData = { ...mission.customData, uploadTimer: timer - 1 };
                 // Keep creating particles during upload
                 if (timer % 15 === 0) {
-                    result.newParticles.push({ pos: player.pos, text: "UPLOADING...", color: '#00FFFF', duration: 30 });
+                    // result.newParticles.push({ pos: player.pos, text: "UPLOADING...", color: '#00FFFF', duration: 30 });
                 }
             } else {
                 result.isComplete = true;
@@ -289,7 +342,17 @@ export const updateMission = (
             const distToPlayer = Math.sqrt(dx * dx + dy * dy);
 
             // Move payload if close (750px range)
-            if (distToPlayer < 750) {
+            // Move payload if close (750px range)
+            const isActive = distToPlayer < 750;
+
+            // Audio FX
+            if (!mission.isComplete) {
+                audioEngine.setEscortHum(isActive);
+            } else {
+                audioEngine.setEscortHum(false);
+            }
+
+            if (isActive) {
                 const moveSpeed = 2;
                 const destDx = payload.destination.x - payload.pos.x;
                 const destDy = payload.destination.y - payload.pos.y;
@@ -298,8 +361,7 @@ export const updateMission = (
                 if (distToDest < 20) {
                     if (!mission.isComplete) {
                         result.isComplete = true;
-                        // Changed from '#FFD700' to '#00FF00'
-                        result.newParticles.push({ pos: payload.pos, text: "DELIVERED", color: '#00FF00', duration: 120 });
+                        audioEngine.setEscortHum(false); // Stop sound immediately on completion
                     }
                 } else {
                     payload.pos.x += (destDx / distToDest) * moveSpeed;
@@ -312,6 +374,9 @@ export const updateMission = (
             const destDy = payload.destination.y - payload.pos.y;
             const distToDest = Math.sqrt(destDx * destDx + destDy * destDy);
             result.mission.progress = Math.max(0, mission.total - distToDest);
+        } else {
+            // Safety: If payload missing, stop sound
+            audioEngine.setEscortHum(false);
         }
     }
     else if (mission.type === MissionType.RITUAL_CIRCLE) {
@@ -327,7 +392,7 @@ export const updateMission = (
                 if (dx * dx + dy * dy < obelisk.radius * obelisk.radius + 1600) {
                     obelisk.active = true;
                     result.mission.progress++;
-                    result.newParticles.push({ pos: obelisk.pos, text: "ACTIVATED", color: '#00FF00', duration: 90 });
+                    // result.newParticles.push({ pos: obelisk.pos, text: "ACTIVATED", color: '#00FF00', duration: 90 });
                 }
             }
         });
@@ -367,7 +432,7 @@ export const updateMission = (
                 if (pGoal.active && cGoal.active && !mission.isComplete) {
                     result.isComplete = true;
                     result.mission.customData = { ...mission.customData, cloneAlive: true };
-                    result.newParticles.push({ pos: player.pos, text: "QUANTUM SYNC", color: '#00FFFF', duration: 120 });
+                    // result.newParticles.push({ pos: player.pos, text: "QUANTUM SYNC", color: '#00FFFF', duration: 120 });
                 }
             }
         } else {
@@ -441,7 +506,7 @@ export const updateMission = (
                 if (Math.abs(distTangent) > fd.holeWidth / 2) {
                     // HIT! Massive Damage - INSTANT KILL
                     player.health = 0;
-                    result.newParticles.push({ pos: player.pos, text: "FATAL ERROR", color: '#FF0000', duration: 60 });
+                    // result.newParticles.push({ pos: player.pos, text: "FATAL ERROR", color: '#FF0000', duration: 60 });
                     result.screenShake = 30; // Massive shake on hit
                 } else {
                     // Safe in hole
@@ -468,7 +533,7 @@ export const updateMission = (
                     if (Math.abs(eDistTangent) > fd.holeWidth / 2) {
                         e.health = 0; // Vaporize
                         // Changed from "PURGED" text to "SHARD" particles
-                        result.newParticles.push(...createShatterParticles(e.pos, '#00FFFF', 8, e.radius));
+                        result.newParticles.push(...createPolygonShatterParticles(e));
                     }
                 }
             });
@@ -489,25 +554,49 @@ export const updateMission = (
         if (horizon) {
             // --- GROWTH LOGIC ---
             // Grow bigger and more powerful as time passes
-            const duration = mission.total * 60; // Total duration in frames
-            const progress = Math.min(1, waveTimer / duration);
+            const BUILDUP_DURATION = 180; // 3 Seconds buildup
+            const totalDuration = mission.total * 60; // Total duration in frames
 
-            // Increased Growth Parameters
+            // Base Params
             const baseRadius = 50;
-            const maxRadius = 350; // Grows significantly larger
-            const currentRadius = baseRadius + (maxRadius - baseRadius) * progress;
+            const maxRadius = 350;
+            const basePullRadius = 600;
+            const maxPullRadius = 1300;
+            const maxForce = 14;
+
+            let currentRadius = baseRadius;
+            let pullRadius = basePullRadius;
+            let forceMultiplier = 1.0;
+
+            if (waveTimer < BUILDUP_DURATION) {
+                // --- BUILDUP PHASE ---
+                const buildupProgress = waveTimer / BUILDUP_DURATION;
+                // EASE IN QUAD for slow start -> fast finish
+                const ease = Math.pow(buildupProgress, 2);
+
+                currentRadius = 1 + (baseRadius - 1) * ease; // Start at 1px
+                pullRadius = 100 + (basePullRadius - 100) * ease;
+                horizon.opacity = ease; // Fade in
+                forceMultiplier = ease * 0.5; // Weak pull during buildup
+            } else {
+                // --- ACTIVE PHASE ---
+                // Calculate progress relative to the remaining time after buildup
+                const activeTime = waveTimer - BUILDUP_DURATION;
+                const activeDuration = totalDuration - BUILDUP_DURATION;
+                const progress = Math.min(1, activeTime / activeDuration);
+
+                currentRadius = baseRadius + (maxRadius - baseRadius) * progress;
+                pullRadius = basePullRadius + (maxPullRadius - basePullRadius) * progress;
+                horizon.opacity = 1.0;
+                forceMultiplier = 1.0;
+            }
+
             if (Number.isFinite(currentRadius)) {
                 horizon.radius = currentRadius; // Visual radius
             }
 
-            const basePullRadius = 600;
-            const maxPullRadius = 1300; // Increased influence area
-            const pullRadius = basePullRadius + (maxPullRadius - basePullRadius) * progress;
-
             const killRadius = currentRadius * 0.8;
-            const coreDeathRadius = 50; // Instant death zone
-
-            const maxForce = 14;
+            const coreDeathRadius = 50 * (waveTimer < BUILDUP_DURATION ? 0 : 1); // No insta-death during buildup start
 
             // --- SUCTION PARTICLES ---
             // 1. Dense debris field near the event horizon
@@ -578,12 +667,12 @@ export const updateMission = (
             if (pDist < pullRadius) {
                 // Standard Pull: Stronger at center
                 const ratio = pDist / pullRadius;
-                force = Math.pow(1 - ratio, 2) * maxForce;
+                force = Math.pow(1 - ratio, 2) * maxForce * forceMultiplier;
             } else {
                 // Outer Pull: Stronger further away (Rubber Band)
                 const distBeyond = pDist - pullRadius;
                 const outerRatio = Math.min(1, distBeyond / 600); // Ramp up force
-                force = outerRatio * maxForce;
+                force = outerRatio * maxForce * forceMultiplier;
             }
 
             // Apply Force with strict NaN guards
@@ -605,21 +694,21 @@ export const updateMission = (
                 // INSTANT DEATH - Consume lives
                 player.health = 0;
                 player.extraLives = 0;
-                result.newParticles.push({
-                    pos: player.pos,
-                    text: "SINGULARITY",
-                    color: '#FF0000',
-                    duration: 60
-                });
+                // result.newParticles.push({
+                //     pos: player.pos,
+                //     text: "SINGULARITY",
+                //     color: '#FF0000',
+                //     duration: 60
+                // });
             } else if (pDist < killRadius) {
                 player.health -= 5;
                 if (waveTimer % 10 === 0) {
-                    result.newParticles.push({
-                        pos: player.pos,
-                        text: "CRITICAL",
-                        color: '#FF0000',
-                        duration: 30
-                    });
+                    // result.newParticles.push({
+                    //     pos: player.pos,
+                    //     text: "CRITICAL",
+                    //     color: '#FF0000',
+                    //     duration: 30
+                    // });
 
                     const safeDist = Math.max(0.1, pDist);
                     result.newParticles.push({
@@ -642,7 +731,7 @@ export const updateMission = (
                 if (eDistSq < pullRadius * pullRadius) {
                     const eDist = Math.sqrt(eDistSq);
                     const ratio = eDist / pullRadius;
-                    const eForce = Math.pow(1 - ratio, 2) * (maxForce * 1.5);
+                    const eForce = Math.pow(1 - ratio, 2) * (maxForce * 1.5 * forceMultiplier);
 
                     if (eDist > 0.1 && Number.isFinite(eDist)) {
                         let mX = (edx / eDist) * eForce;
@@ -691,7 +780,7 @@ export const updateMission = (
                     }
 
                     const ratio = pDist / pullRadius;
-                    const pForce = Math.pow(1 - ratio, 2) * 2.0;
+                    const pForce = Math.pow(1 - ratio, 2) * 2.0 * forceMultiplier;
 
                     if (pDist > 0.1 && Number.isFinite(pDist)) {
                         const moveX = (pdx / pDist) * pForce;
@@ -725,7 +814,7 @@ export const updateMission = (
 
                     const ratio = pDist / pullRadius;
                     // Pickups are light, pull them fast
-                    const pForce = Math.pow(1 - ratio, 2) * (maxForce * 1.2);
+                    const pForce = Math.pow(1 - ratio, 2) * (maxForce * 1.2 * forceMultiplier);
 
                     if (pDist > 0.1 && Number.isFinite(pDist)) {
                         const moveX = (pdx / pDist) * pForce;
@@ -738,6 +827,330 @@ export const updateMission = (
                     }
                 }
             });
+        }
+    } else if (mission.type === MissionType.RESCUE) {
+
+        // --- PHASE 0: SPAWN GUARDS (First Tick) ---
+        if (mission.customData?.needsSpawn) {
+            delete mission.customData.needsSpawn;
+            const allies = missionEntities.filter(e => e.kind === 'ALLY');
+            const allyGuards: Record<string, string[]> = {};
+
+            allies.forEach((ally, index) => {
+                const guards: string[] = [];
+                // Spawn 3 Sentinels per Ally
+                for (let j = 0; j < 3; j++) {
+                    const gAngle = (Math.PI * 2 / 3) * j;
+                    const gDist = 120;
+                    const gPos = {
+                        x: ally.pos.x + Math.cos(gAngle) * gDist,
+                        y: ally.pos.y + Math.sin(gAngle) * gDist
+                    };
+                    const guard = spawnEnemy(player, EnemyType.SENTINEL, gPos, waveIndex);
+                    guard.isMissionTarget = true;
+                    // Persist initial angle for circling
+                    guard.customData = {
+                        circleAngle: gAngle,
+                        circleCenterId: ally.id,
+                        isCircling: true
+                    };
+                    result.newEnemies.push(guard);
+                    guards.push(guard.id);
+                }
+                allyGuards[ally.id] = guards;
+            });
+            result.mission.customData = { ...mission.customData, allyGuards, guardsSpawned: true, spawnTime: waveTimer };
+        }
+
+        // --- PHASE 1: RESCUE ALLIES ---
+        if (mission.progress < mission.total) {
+            const allies = missionEntities.filter(e => e.kind === 'ALLY');
+            const guardMap = mission.customData?.allyGuards || {};
+
+            const guardsSpawned = mission.customData?.guardsSpawned;
+            const spawnTime = mission.customData?.spawnTime || 0;
+
+            // Update Guard Behavior (Circling)
+            enemies.forEach(e => {
+                if (e.customData?.isCircling && e.customData?.circleCenterId && !e.markedForDeletion) {
+                    const ally = allies.find(a => a.id === e.customData.circleCenterId);
+                    if (ally) {
+                        const distToPlayer = Math.sqrt((player.pos.x - e.pos.x) ** 2 + (player.pos.y - e.pos.y) ** 2);
+
+                        // Break circle if player represents a threat
+                        if (distToPlayer < 400) {
+                            e.customData.isCircling = false;
+                        } else {
+                            // Orbit Logic
+                            e.customData.circleAngle = (e.customData.circleAngle || 0) + 0.02;
+                            const radius = 120;
+                            const targetX = ally.pos.x + Math.cos(e.customData.circleAngle) * radius;
+                            const targetY = ally.pos.y + Math.sin(e.customData.circleAngle) * radius;
+
+                            // Smoothly move to orbit position
+                            e.pos.x += (targetX - e.pos.x) * 0.1;
+                            e.pos.y += (targetY - e.pos.y) * 0.1;
+
+                            // Override velocity to zero to prevent drift from physics engine while orbiting
+                            e.velocity.x = 0;
+                            e.velocity.y = 0;
+                        }
+                    } else {
+                        // Ally gone, stop circling
+                        e.customData.isCircling = false;
+                    }
+                }
+            });
+
+            if (guardsSpawned && waveTimer > spawnTime) {
+                allies.forEach((ally, index) => {
+                    const guardIds = guardMap[ally.id] || [];
+                    if (guardIds.length === 0) return;
+
+                    // Check if all guards are dead
+                    const aliveGuards = enemies.filter(e => guardIds.includes(e.id) && !e.markedForDeletion);
+
+                    if (waveTimer % 60 === 0) {
+                        console.log(`Ally ${index} (${ally.id}): Guards Total ${guardIds.length}, Alive ${aliveGuards.length}`, aliveGuards.map(e => e.id));
+                    }
+
+                    if (aliveGuards.length === 0) {
+                        // ALLY FREED!
+                        result.mission.progress++;
+                        ally.markedForDeletion = true;
+
+                        // Retrieve Saved Class
+                        const allyClass = ally.customData?.allyClass || 'ASSAULT';
+
+                        // Slot Logic
+                        // We have 4 allies now. Slots?
+                        // 0: (-60, -60), 1: (60, -60), 2: (-90, -30), 3: (90, -30) -- simple wedge
+                        const slotIdx = result.mission.progress - 1;
+                        const offset = { x: 0, y: 0 };
+
+                        if (slotIdx === 0) { offset.x = -60; offset.y = -60; }
+                        else if (slotIdx === 1) { offset.x = 60; offset.y = -60; }
+                        else if (slotIdx === 2) { offset.x = -40; offset.y = -100; }
+                        else { offset.x = 40; offset.y = -100; }
+
+                        console.log(`RESCUE: ALLY FREED! ID: ${ally.id}, Class: ${allyClass}, Slot: ${slotIdx}`);
+
+                        const replica = createAllyReplica(ally.pos, offset, player.stats, allyClass);
+                        if (!result.newReplicas) result.newReplicas = [];
+                        result.newReplicas.push(replica);
+
+                        // result.newParticles.push({ pos: ally.pos, text: `${allyClass} UNIT ONLINE`, color: replica.color, duration: 120 });
+                        result.screenShake = 5;
+                    }
+                });
+            }
+        }
+        // --- PHASE 2: ELITE SQUAD BATTLE ---
+        else if (mission.progress === mission.total && !mission.customData?.phase2Started) {
+            // Trigger Phase 2 once
+            result.mission.customData = { ...mission.customData, phase2Started: true };
+            result.mission.description = "DEFEAT ELITE SQUAD";
+
+            // Spawn Strong Enemies (e.g. 1 Tank + 4 Elites)
+            // Formation ahead of player
+            const angle = player.rotation; // facing dir
+            const dist = 1500;
+            const centerPos = {
+                x: player.pos.x + Math.cos(angle) * dist,
+                y: player.pos.y + Math.sin(angle) * dist
+            };
+
+            // Tank Center (Now 2 Tanks)
+            for (let i = 0; i < 2; i++) {
+                const tOffset = (i === 0 ? -40 : 40);
+                const tPos = { ...centerPos, x: centerPos.x + Math.cos(angle + Math.PI / 2) * tOffset, y: centerPos.y + Math.sin(angle + Math.PI / 2) * tOffset };
+                const tank = spawnEnemy(player, EnemyType.TANK, tPos, waveIndex + 2);
+                tank.isMissionTarget = true;
+                result.newEnemies.push(tank);
+            }
+
+            // Elites Flanking
+            for (let i = 0; i < 4; i++) {
+                const fAngle = angle + (i % 2 === 0 ? 1 : -1) * (0.6 + Math.floor(i / 2) * 0.4);
+                const fDist = dist;
+                const fPos = {
+                    x: player.pos.x + Math.cos(fAngle) * fDist,
+                    y: player.pos.y + Math.sin(fAngle) * fDist
+                };
+                const elite = spawnEnemy(player, EnemyType.ELITE_DRONE, fPos, waveIndex + 1);
+                elite.isMissionTarget = true;
+                result.newEnemies.push(elite);
+            }
+
+            // Sentinels Support
+            for (let i = 0; i < 3; i++) {
+                const sAngle = angle + (i - 1) * 0.3;
+                const sDist = dist - 150; // Slightly in front/between
+                const sPos = {
+                    x: player.pos.x + Math.cos(sAngle) * sDist,
+                    y: player.pos.y + Math.sin(sAngle) * sDist
+                };
+                const sentinel = spawnEnemy(player, EnemyType.SENTINEL, sPos, waveIndex + 1);
+                sentinel.isMissionTarget = true;
+                result.newEnemies.push(sentinel);
+            }
+
+            result.screenShake = 20;
+            // result.newParticles.push({ pos: player.pos, text: "ENEMIES INCOMING", color: '#FF0000', duration: 120 });
+        }
+        else if (mission.customData?.phase2Started) {
+            // Check for completion (Kill all targets)
+            const targets = enemies.filter(e => e.isMissionTarget && !e.markedForDeletion);
+            if (targets.length === 0) {
+                result.isComplete = true;
+            }
+        }
+
+    } else if (mission.type === MissionType.SOLAR_STORM) {
+        result.mission.progress = Math.floor(waveTimer / 60);
+        if (result.mission.progress >= mission.total) result.isComplete = true;
+
+
+        const sd = mission.customData?.solarData;
+        if (sd) {
+            sd.timer--;
+
+            // --- STATE MACHINE ---
+            if (sd.state === 'CALM') {
+                audioEngine.setSolarIntensity(0);
+                if (sd.timer <= 0) {
+                    sd.state = 'WARNING';
+                    sd.timer = 180; // 3 seconds warning
+                    sd.sunAngle += (Math.random() - 0.5); // Shift sun angle slightly
+                }
+            } else if (sd.state === 'WARNING') {
+                // Warning Effects
+                if (sd.timer % 30 === 0) {
+                    result.newParticles.push({ pos: player.pos, text: "SEEK SHELTER", color: '#FF4400', duration: 30 });
+                    result.screenShake = 2;
+                }
+
+                // Audio Ramp Up (0 -> 0.4)
+                audioEngine.setSolarIntensity(0.4 * (1 - sd.timer / 180));
+
+                if (sd.timer <= 0) {
+                    sd.state = 'STORM';
+                    sd.timer = 480; // 8 seconds storm
+                }
+            } else if (sd.state === 'STORM') {
+                // Storm Effects & Damage
+                result.screenShake = 1.5;
+                sd.intensity = Math.min(1, (480 - sd.timer) / 60); // Ramp up intensity
+
+                // Audio High Intensity (0.4 -> 1.0)
+                audioEngine.setSolarIntensity(0.4 + 0.6 * sd.intensity);
+
+                // Check for safety (Shadow Logic)
+                let isSafe = false;
+                const badges = missionEntities.filter(e => e.kind === 'SOLAR_SHIELD');
+
+                // Vector pointing TO the sun
+                const sunDirX = Math.cos(sd.sunAngle);
+                const sunDirY = Math.sin(sd.sunAngle);
+
+                for (const shield of badges) {
+                    // Vector from Shield to Player
+                    const dx = player.pos.x - shield.pos.x;
+                    const dy = player.pos.y - shield.pos.y;
+
+                    // Project player position onto the "Shadow Axis" (direction away from sun)
+                    // We want component along the shadow vector (opposite to sun)
+                    // Shadow Vector = -SunDir
+                    const shadowDirX = -sunDirX;
+                    const shadowDirY = -sunDirY;
+
+                    const distAlongShadow = dx * shadowDirX + dy * shadowDirY;
+                    const distPerpShadow = dx * -shadowDirY + dy * shadowDirX; // Perpendicular distance
+
+                    // Simple shadow box check
+                    // Must be "behind" the shield (positive distance along shadow)
+                    // Must be within width of the shield (perp distance < radius)
+                    // And not too far (shadow length limit, e.g., 600px)
+                    if (distAlongShadow > 0 && distAlongShadow < 800 && Math.abs(distPerpShadow) < shield.radius * 1.2) {
+                        isSafe = true;
+                        break;
+                    }
+                }
+
+                if (!isSafe) {
+                    // BURN DAMAGE
+                    if (waveTimer % 10 === 0) {
+                        player.health -= 5;
+                        result.newParticles.push({ pos: player.pos, text: "BURN", color: '#FF0000', duration: 30 });
+
+                        // Burn particles
+                        result.newParticles.push({
+                            id: Math.random().toString(),
+                            type: EntityType.VISUAL_PARTICLE,
+                            pos: { ...player.pos },
+                            velocity: { x: (Math.random() - 0.5) * 2, y: -2 - Math.random() * 2 },
+                            color: '#FF4400',
+                            life: 20,
+                            maxLife: 20,
+                            size: 3,
+                            decay: 0.9
+                        } as any);
+                    }
+                } else {
+                    if (waveTimer % 60 === 0) {
+                        // result.newParticles.push({ pos: player.pos, text: "SHELTERED", color: '#00FF00', duration: 40 });
+                    }
+                }
+
+                // --- ENEMY DESTRUCTION LOGIC ---
+                // Enemies not in shadow get incinerated (No XP)
+                if (waveTimer % 10 === 0) {
+                    enemies.forEach(enemy => {
+                        // Bosses might be immune or take heavy damage instead? User said "enemies quickly pile up", implying fodder.
+                        // Let's safe-guard bosses for now or apply damage? "Destroy all enemies directly exposed"
+                        // Let's kill normal enemies, maybe damage bosses?
+                        if (enemy.isBoss) return;
+
+                        let isEnemySafe = false;
+                        for (const shield of badges) {
+                            const dx = enemy.pos.x - shield.pos.x;
+                            const dy = enemy.pos.y - shield.pos.y;
+                            const shadowDirX = -sunDirX;
+                            const shadowDirY = -sunDirY;
+                            const distAlongShadow = dx * shadowDirX + dy * shadowDirY;
+                            const distPerpShadow = dx * -shadowDirY + dy * shadowDirX;
+
+                            if (distAlongShadow > 0 && distAlongShadow < 800 && Math.abs(distPerpShadow) < shield.radius * 1.2) {
+                                isEnemySafe = true;
+                                break;
+                            }
+                        }
+
+                        if (!isEnemySafe) {
+                            enemy.health = 0;
+                            enemy.skipDrop = true; // No XP
+                            // Visuals
+                            result.newParticles.push({
+                                id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                                pos: { ...enemy.pos }, velocity: { x: 0, y: -2 },
+                                color: '#FF4400', life: 20, maxLife: 20, size: enemy.radius, decay: 0.8
+                            } as any);
+                        }
+                    });
+                }
+
+                if (sd.timer <= 0) {
+                    sd.state = 'CALM'; // Keep state valid but irrelevant
+                    result.isComplete = true; // Mission Complete!
+                    result.mission.progress = mission.total; // Ensure progress bar fills
+
+                    // Stop audio effects
+                    audioEngine.setSolarIntensity(0);
+                }
+            }
+
+            // Persist state updates
+            result.mission.customData = { ...mission.customData, solarData: sd };
         }
     }
 
@@ -766,7 +1179,7 @@ export const handleMissionPickup = (
         if (kind === 'MISSION_ITEM' && mission.stage === 'LOCATE_FRAGMENT') {
             result.mission.stage = 'UPLOAD_DATA';
             result.mission.description = "UPLOAD DATA AT ZONE";
-            result.newParticles.push({ pos: { ...pos }, text: "DATA ACQUIRED", color: '#00FFFF', duration: 120 });
+            // result.newParticles.push({ pos: { ...pos }, text: "DATA ACQUIRED", color: '#00FFFF', duration: 120 });
 
             const angle = Math.random() * Math.PI * 2;
             const dist = 3000;
@@ -785,7 +1198,7 @@ export const handleMissionPickup = (
             result.mission.description = "UPLOADING...";
             result.mission.customData = { uploadTimer: 60 }; // 60 frames = 1 second
             // Particle to indicate start
-            result.newParticles.push({ pos: { ...pos }, text: "INITIALIZING UPLOAD", color: '#00FFFF', duration: 60 });
+            // result.newParticles.push({ pos: { ...pos }, text: "INITIALIZING UPLOAD", color: '#00FFFF', duration: 60 });
         }
     }
 

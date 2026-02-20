@@ -5,8 +5,8 @@ import { ALL_ENEMIES_DB, generateRunWaves } from '../../services/gameData';
 import { OverlayContainer } from '../Common';
 import { audioEngine, MusicTheme } from '../../services/audioEngine';
 
-export const DebugMenu: React.FC<{ 
-    generateOptions: () => UpgradeOption[], 
+export const DebugMenu: React.FC<{
+    generateOptions: () => UpgradeOption[],
     onSelect: (opt: UpgradeOption) => void,
     onClose: () => void,
     onSpawnEnemy: (type: EnemyType) => void,
@@ -16,7 +16,7 @@ export const DebugMenu: React.FC<{
 }> = ({ generateOptions, onSelect, onClose, onSpawnEnemy, onStartMission, onSkipWave, onSpawnPickup }) => {
     const [tab, setTab] = useState<'SPAWN' | 'MISSION' | 'CHEATS' | 'LOOT' | 'AUDIO'>('SPAWN');
     const [refreshCounter, setRefreshCounter] = useState(0); // Used to force re-render on cheat select
-    
+
     // generateOptions reads from mutable refs, so re-calling it on render gives fresh data
     const options = generateOptions();
 
@@ -39,15 +39,15 @@ export const DebugMenu: React.FC<{
     const allEnemyData = Object.values(EnemyType).map(type => {
         const info = ALL_ENEMIES_DB.find(e => e.type === type);
         const waves = wavesCache.get(type)?.sort((a, b) => a - b) || [];
-        const waveStr = waves.length > 0 
+        const waveStr = waves.length > 0
             ? (waves.filter(w => w <= 20).join(', ') + (waves.some(w => w > 20) ? ', ...' : ''))
             : "None";
-            
-        return { 
-            type, 
-            info, 
+
+        return {
+            type,
+            info,
             waveStr,
-            sortOrder: waves.length > 0 ? waves[0] : 999 
+            sortOrder: waves.length > 0 ? waves[0] : 999
         };
     });
 
@@ -62,7 +62,7 @@ export const DebugMenu: React.FC<{
 
     const renderEnemyButton = (item: { type: EnemyType, info: any, waveStr: string }) => (
         <button key={item.type} onClick={() => onSpawnEnemy(item.type)} className="flex items-start gap-3 bg-gray-900 border border-gray-700 hover:border-green-500 text-left p-2 hover:bg-gray-800 group h-full">
-            <div className="w-3 h-3 mt-1 border border-gray-600 group-hover:border-white shrink-0" style={{backgroundColor: item.info?.color || '#555'}}></div>
+            <div className="w-3 h-3 mt-1 border border-gray-600 group-hover:border-white shrink-0" style={{ backgroundColor: item.info?.color || '#555' }}></div>
             <div className="flex flex-col min-w-0 w-full">
                 <div className="text-green-400 font-bold text-xs group-hover:text-white truncate">{item.info ? item.info.name : item.type}</div>
                 {item.info ? (
@@ -81,23 +81,23 @@ export const DebugMenu: React.FC<{
     );
 
     const lootTypes = [
-        'XP_SMALL', 'XP_LARGE', 'HEALTH', 'CURRENCY', 
-        'TIME_CRYSTAL', 'SUPPLY_DROP', 
+        'XP_SMALL', 'XP_LARGE', 'HEALTH', 'CURRENCY',
+        'TIME_CRYSTAL', 'SUPPLY_DROP',
         'MISSION_ITEM', 'MISSION_ZONE',
         'KALEIDOSCOPE', 'STASIS_FIELD'
     ];
 
     const themes: MusicTheme[] = [
-        'DEEP_CIRCUIT', 
-        'SUB_TERRA', 
-        'CIRCUIT_BREAKER', 
+        'DEEP_CIRCUIT',
+        'SUB_TERRA',
+        'CIRCUIT_BREAKER',
         'LOGIC_GATE',
-        
+
         'ETHEREAL_VOYAGE',
-        
+
         'MIND_FLAYER',
 
-        'GLITCH_STORM', 
+        'GLITCH_STORM',
         'SOLAR_PLAINS'
     ];
 
@@ -108,9 +108,9 @@ export const DebugMenu: React.FC<{
                 <span className="text-green-400 font-bold uppercase">{label}</span>
                 <span className="text-white font-mono">{(audioEngine[prop] as number).toFixed(2)}</span>
             </div>
-            <input 
-                type="range" 
-                min={min} max={max} step={step} 
+            <input
+                type="range"
+                min={min} max={max} step={step}
                 defaultValue={audioEngine[prop] as number}
                 onChange={(e) => {
                     (audioEngine as any)[prop] = parseFloat(e.target.value);
@@ -122,7 +122,7 @@ export const DebugMenu: React.FC<{
     );
 
     const renderAudioToggle = (label: string, prop: keyof typeof audioEngine) => (
-        <button 
+        <button
             className={`flex items-center justify-between p-2 border ${audioEngine[prop] ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-900'} hover:bg-gray-800`}
             onClick={() => {
                 (audioEngine as any)[prop] = !audioEngine[prop];
@@ -163,7 +163,7 @@ export const DebugMenu: React.FC<{
                                     {regularEnemies.map(renderEnemyButton)}
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <div className="text-red-700 font-bold mb-2 border-b border-gray-800">BOSS THREATS</div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -187,7 +187,7 @@ export const DebugMenu: React.FC<{
                     {tab === 'CHEATS' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                             <div className="col-span-1 md:col-span-2 lg:col-span-3 text-green-700 font-bold mb-1 border-b border-gray-800">UPGRADES / CHEATS</div>
-                            
+
                             <button onClick={onSkipWave} className="flex items-center gap-2 bg-gray-900 border border-blue-700 hover:bg-gray-800 p-2 hover:border-white text-left group">
                                 <div className="w-4 h-4 border border-gray-600 group-hover:border-white bg-blue-500"></div>
                                 <div className="flex flex-col">
@@ -197,15 +197,15 @@ export const DebugMenu: React.FC<{
                             </button>
 
                             {options.map((opt, idx) => (
-                                <button 
-                                    key={idx} 
+                                <button
+                                    key={idx}
                                     onClick={() => {
                                         onSelect(opt);
                                         setRefreshCounter(prev => prev + 1);
-                                    }} 
+                                    }}
                                     className="flex items-center gap-2 bg-gray-900 border border-gray-700 hover:bg-gray-800 p-2 hover:border-white text-left group"
                                 >
-                                    <div className="w-4 h-4 border border-gray-600 group-hover:border-white" style={{backgroundColor: opt.color}}></div>
+                                    <div className="w-4 h-4 border border-gray-600 group-hover:border-white" style={{ backgroundColor: opt.color }}></div>
                                     <div className="flex flex-col">
                                         <span className="text-green-400 font-bold group-hover:text-white">{opt.name}</span>
                                         <span className="text-[10px] text-gray-500">{opt.description.substring(0, 40)}...</span>
@@ -230,7 +230,7 @@ export const DebugMenu: React.FC<{
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div className="col-span-full text-green-700 font-bold mb-1 border-b border-gray-800 flex justify-between">
                                 <span>PROCEDURAL AUDIO PARAMS</span>
-                                <button 
+                                <button
                                     className="text-[10px] bg-red-900 px-2 text-white hover:bg-red-700"
                                     onClick={() => {
                                         // Reset Basics
@@ -277,7 +277,7 @@ export const DebugMenu: React.FC<{
                                     ))}
                                 </div>
                             </div>
-                            
+
                             {/* Basic Modulators */}
                             {renderAudioControl('Filter Mod Depth', 'filterModDepth', 0, 1, 0.05)}
                             {renderAudioControl('Note Density Mod', 'noteDensityMod', -1, 1, 0.1)}
@@ -288,14 +288,14 @@ export const DebugMenu: React.FC<{
 
                             {/* Advanced Events */}
                             <div className="col-span-full text-green-700 font-bold mt-4 mb-1 border-b border-gray-800">ADVANCED AUDIO EVENTS</div>
-                            
+
                             <div className="grid grid-cols-2 gap-2">
                                 {renderAudioToggle('Breakdown FX (Auto)', 'breakdownMode')}
                                 {renderAudioToggle('Force Breakdown', 'forceBreakdown')}
                                 {renderAudioToggle('Build-up FX (Auto)', 'buildupMode')}
-                                
+
                                 {/* Octave Toggle */}
-                                <button 
+                                <button
                                     className={`flex items-center justify-between p-2 border ${audioEngine.currentOctaveShift < 1.0 ? 'border-orange-500 bg-orange-900/30' : 'border-gray-700 bg-gray-900'} hover:bg-gray-800`}
                                     onClick={() => {
                                         audioEngine.currentOctaveShift = audioEngine.currentOctaveShift < 1.0 ? 1.0 : 0.5;

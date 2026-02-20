@@ -105,6 +105,11 @@ export const GameHUD: React.FC<{
         if (mission.type === MissionType.SURVIVE || mission.type === MissionType.EVENT_HORIZON) {
             timeLeft = Math.max(0, mission.total - mission.progress);
             displayContent = `${timeLeft}s`;
+        } else if (mission.type === MissionType.SOLAR_STORM) {
+            const state = mission.customData?.solarData?.state;
+            if (state === 'WARNING') displayContent = "WARNING";
+            else if (state === 'STORM') displayContent = "DANGER";
+            else displayContent = ""; // Calm
         } else if (mission.type === MissionType.ELIMINATE) {
             displayContent = `${mission.progress}/${mission.total}`;
         } else if (mission.type === MissionType.DATA_RUN) {
@@ -173,12 +178,32 @@ export const GameHUD: React.FC<{
                 </div>
 
                 <div className="text-right flex flex-col items-end gap-2">
-                    <button
-                        onClick={onPause}
-                        className="pointer-events-auto bg-black/50 hover:bg-gray-800 text-white border border-gray-600 px-3 py-1 text-xs font-bold uppercase tracking-widest"
-                    >
-                        Pause
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => {
+                                if (!document.fullscreenElement) {
+                                    document.documentElement.requestFullscreen().catch(err => {
+                                        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+                                    });
+                                } else {
+                                    if (document.exitFullscreen) {
+                                        document.exitFullscreen();
+                                    }
+                                }
+                            }}
+                            className="pointer-events-auto bg-black/50 hover:bg-gray-800 text-white border border-gray-600 w-8 h-8 flex items-center justify-center text-lg"
+                            title="Toggle Fullscreen"
+                        >
+                            ⛶
+                        </button>
+                        <button
+                            onClick={onPause}
+                            className="pointer-events-auto bg-black/50 hover:bg-gray-800 text-white border border-gray-600 w-8 h-8 flex items-center justify-center text-lg"
+                            title="Pause"
+                        >
+                            ⏸
+                        </button>
+                    </div>
                     <CurrencyDisplay amount={uiStats.currency} size="xl" />
                 </div>
             </div>

@@ -16,11 +16,25 @@ const DEFAULT_STATE: MetaState = {
     'harmonic_tuner',
     'data_siphon',
     'attractor_field',
-    'polyrhythm_core',
+
     'titan_frame'
   ],
   permanentUpgrades: {},
-  maxWaveCompleted: 0
+  maxWaveCompleted: 0,
+  personalBests: {
+    maxKills: 0,
+    maxDamage: 0,
+    maxChips: 0
+  },
+  seenItems: [
+    'spirit_lance',
+    'void_aura',
+    'cyber_kora',
+    'harmonic_tuner',
+    'data_siphon',
+    'attractor_field',
+    'titan_frame'
+  ]
 };
 
 export const loadMetaState = (): MetaState => {
@@ -33,11 +47,14 @@ export const loadMetaState = (): MetaState => {
       const defaultUnlocks = new Set(DEFAULT_STATE.unlockedItems);
       // Union of saved and currently default
       const combined = [...new Set([...savedUnlocks, ...defaultUnlocks])];
-      
-      return { 
-        ...DEFAULT_STATE, 
+
+      return {
+        ...DEFAULT_STATE,
         ...parsed,
-        unlockedItems: combined
+        unlockedItems: combined,
+        // Ensure nested objects are merged correctly if missing in saved
+        personalBests: { ...DEFAULT_STATE.personalBests, ...(parsed.personalBests || {}) },
+        seenItems: parsed.seenItems || DEFAULT_STATE.seenItems
       };
     }
   } catch (e) {
@@ -55,6 +72,6 @@ export const saveMetaState = (state: MetaState) => {
 };
 
 export const resetMetaState = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    window.location.reload();
+  localStorage.removeItem(STORAGE_KEY);
+  window.location.reload();
 };

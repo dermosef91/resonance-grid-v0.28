@@ -18,7 +18,7 @@ export const useEnemyManager = (gameState: any) => {
 
     const addEnemies = useCallback((newEnemies: Enemy[]) => {
         const candidates: Enemy[] = [];
-        
+
         newEnemies.forEach(e => {
             const cap = ENEMY_CAPS[e.enemyType];
             if (cap !== undefined) {
@@ -29,16 +29,23 @@ export const useEnemyManager = (gameState: any) => {
             candidates.push(e);
         });
 
+        // Prioritize Mission Targets and Bosses to prevent them from being culled by the cap
+        candidates.sort((a, b) => {
+            const aPrio = (a.isMissionTarget || a.isBoss) ? 1 : 0;
+            const bPrio = (b.isMissionTarget || b.isBoss) ? 1 : 0;
+            return bPrio - aPrio;
+        });
+
         if (candidates.length === 0) return;
 
         const currentValid = enemiesRef.current.filter((e: Enemy) => !e.markedForDeletion);
         const effectiveLimit = missionRef.current.type === MissionType.KING_OF_THE_HILL ? 30 : MAX_GLOBAL_ENEMIES;
         const totalAfter = currentValid.length + candidates.length;
-        
+
         if (totalAfter > effectiveLimit) {
             const toRemove = totalAfter - effectiveLimit;
             let removedCount = 0;
-            
+
             const cam = cameraRef.current;
             const vW = window.innerWidth / ZOOM_LEVEL;
             const vH = window.innerHeight / ZOOM_LEVEL;
@@ -56,13 +63,36 @@ export const useEnemyManager = (gameState: any) => {
                     }
                 }
             }
-            
+
             if (removedCount < toRemove) {
-                const keepCount = candidates.length - (toRemove - removedCount);
-                if (keepCount < candidates.length) candidates.length = Math.max(0, keepCount);
+                // We need to trim candidates to respect the limit.
+                // HOWEVER, we should never drop Mission Targets or Bosses.
+                // If effectiveLimit is reached with targets, we slightly overflow (Soft Cap).
+
+                // Identify how many we *want* to drop
+                const neededDrop = toRemove - removedCount;
+
+                // Sort candidates so expendable ones (non-targets) are at the end
+                // We already sorted targets to the front (index 0).
+
+                // Find the cut-off index.
+                let cutIndex = candidates.length - neededDrop;
+
+                // Ensure cutIndex doesn't slice into critical enemies
+                // We iterate from the back; if we hit a target, we stop trimming.
+                // Since targets are sorted to the front, we just need to ensure cutIndex >= number of targets.
+                const targetCount = candidates.filter(c => c.isMissionTarget || c.isBoss).length;
+
+                if (cutIndex < targetCount) {
+                    cutIndex = targetCount; // Force keep all targets
+                }
+
+                if (cutIndex < candidates.length) {
+                    candidates.length = Math.max(0, cutIndex);
+                }
             }
         }
-        
+
         if (candidates.length > 0) enemiesRef.current.push(...candidates);
     }, [enemiesRef, missionRef, cameraRef]);
 

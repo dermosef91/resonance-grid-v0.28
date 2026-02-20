@@ -13,7 +13,7 @@ export const BASE_WEAPONS: Record<string, Weapon> = {
 
     nanite_swarm: {
         id: 'nanite_swarm', name: 'Nanite Swarm', description: 'Autonomous drones, locking onto enemies.', cooldown: 46, currentCooldown: 0, damage: 15, level: 1, type: 'HOMING', count: 1, pierce: 1, duration: 120, area: 1, speed: 12, color: '#00FF00',
-        unlockCost: 75, unlockReq: { type: 'NONE', value: 0 }
+        unlockCost: 75, unlockReq: { type: 'RUNS', value: 1 }
     },
 
     solar_chakram: {
@@ -27,7 +27,7 @@ export const BASE_WEAPONS: Record<string, Weapon> = {
     },
 
     drum_echo: {
-        id: 'drum_echo', name: 'Orbital drums', description: 'Drum satellites orbit and protect you.', cooldown: 0, currentCooldown: 0, damage: 7.5, level: 1, type: 'ORBITAL', count: 2, pierce: 999, duration: 5, area: 1, speed: 0, color: '#FFD700',
+        id: 'drum_echo', name: 'Orbital drums', description: 'Drum satellites orbit and protect you.', cooldown: 0, currentCooldown: 0, damage: 7.5, level: 1, type: 'ORBITAL', count: 2, pierce: 999, duration: 5, area: 1, speed: 0, color: '#0088FF',
         unlockCost: 450, unlockReq: { type: 'WAVE', value: 10 }
     },
 
@@ -58,8 +58,8 @@ export const WEAPON_AUGMENTS: Record<string, [AugmentDef, AugmentDef]> = {
         { id: 'PHASE_DRILL', name: 'Phase Drill', description: 'Infinite Pierce, massive size, but slower projectile speed.', color: '#aa00ff' }
     ],
     cyber_kora: [
-        { id: 'RESONANT_FEEDBACK', name: 'Resonant Feedback', description: 'Enemies hit by the wave trigger explosive sparks.', color: '#FF4500' },
-        { id: 'SONIC_WALL', name: 'Sonic Wall', description: 'Waves linger as stationary shields with high knockback.', color: '#00FFFF' }
+        { id: 'DISSONANCE_SHREDDER', name: 'Dissonance Shredder', description: 'Waves apply a bleeding effect (DoT) and look glitchy.', color: '#FF0033' },
+        { id: 'ACOUSTIC_BARRIER', name: 'Acoustic Barrier', description: 'Waves solidify into a neon barrier at max range.', color: '#00FFFF' }
     ],
     void_aura: [
         { id: 'SUPERNOVA', name: 'Supernova', description: 'Expand base radius by 50% and pulsing size.', color: '#FF00FF' },

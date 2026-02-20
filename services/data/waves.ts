@@ -17,16 +17,22 @@ const GRP_7 = [EnemyType.SENTINEL, EnemyType.LASER_LOTUS, EnemyType.MANDELBROT_M
 const GRP_8 = [EnemyType.ORBITAL_SNIPER, EnemyType.INFERNO_SPINNER];
 const GRP_9 = [EnemyType.NEON_COBRA, EnemyType.LASER_LOTUS, EnemyType.BINARY_SENTINEL]; // Pre-Boss 3
 
-const MISSION_POOL = [
+const SIMPLE_MISSIONS = [
     MissionType.DATA_RUN,
     MissionType.ELIMINATE,
     MissionType.KING_OF_THE_HILL,
     MissionType.PAYLOAD_ESCORT,
     MissionType.RITUAL_CIRCLE,
-    MissionType.SHADOW_STEP,
+    MissionType.SHADOW_STEP
+];
+
+const ADVANCED_MISSIONS = [
     MissionType.ENTANGLEMENT,
     MissionType.THE_GREAT_FILTER,
-    MissionType.EVENT_HORIZON
+    MissionType.THE_GREAT_FILTER, // Weighted
+    MissionType.EVENT_HORIZON,
+    MissionType.SOLAR_STORM,
+    MissionType.RESCUE
 ];
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -38,7 +44,24 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 export const generateRunWaves = (): WaveConfig[] => {
-    const pool = shuffleArray([...MISSION_POOL]);
+    // 1. Prepare Pools
+    const simplePool = shuffleArray([...SIMPLE_MISSIONS]);
+    const advancedPool = shuffleArray([...ADVANCED_MISSIONS]);
+
+    // 2. Select Missions
+    // Wave 2 Mission (Must be Simple)
+    const m1 = simplePool[0];
+
+    // Remaining Missions (Wave 4, 8, 10, 14, 17) - Can be anything
+    // Combine remaining simple + all advanced
+    const remainingSimple = simplePool.slice(1);
+    const combinedPool = shuffleArray([...remainingSimple, ...advancedPool]);
+
+    const m2 = combinedPool[0];
+    const m3 = combinedPool[1];
+    const m4 = combinedPool[2];
+    const m5 = combinedPool[3];
+    const m6 = combinedPool[4] || simplePool[0]; // Fallback
 
     // Helper to scale mission parameters based on "difficulty" (1-5)
     const getParam = (type: MissionType, difficulty: number): number => {
@@ -48,23 +71,17 @@ export const generateRunWaves = (): WaveConfig[] => {
             case MissionType.KING_OF_THE_HILL: return 720 + (difficulty * 60); // 12s + 1s per diff
             case MissionType.SHADOW_STEP: return 20; // Reduced to 20s
             case MissionType.EVENT_HORIZON: return 30 + (difficulty * 2); // Reduced from 45 + diff*5
+            case MissionType.SOLAR_STORM: return 60; // Fixed duration for now
             // No param needed for these:
             case MissionType.DATA_RUN:
             case MissionType.PAYLOAD_ESCORT:
             case MissionType.RITUAL_CIRCLE:
             case MissionType.ENTANGLEMENT:
             case MissionType.THE_GREAT_FILTER:
+            case MissionType.RESCUE:
             default: return 0;
         }
     };
-
-    // Distribute missions from the pool
-    const m1 = pool[0];
-    const m2 = pool[1];
-    const m3 = pool[2];
-    const m4 = pool[3];
-    const m5 = pool[4];
-    const m6 = pool[5] || pool[0];
 
     const waves: WaveConfig[] = [
         // BLOCK 1: Intro (Enemies: Basic)
@@ -251,6 +268,8 @@ export const generateRunWaves = (): WaveConfig[] => {
 
     // Generate up to 100 waves for endless play
     // Pattern: 21(Survive) -> 22(Mission) ...
+    const fullPool = [...SIMPLE_MISSIONS, ...ADVANCED_MISSIONS];
+
     for (let i = 21; i <= 100; i++) {
         const difficulty = Math.floor((i - 20) / 2); // Scales slowly
         const isMission = i % 2 === 0; // Even = Mission, Odd = Survive
@@ -260,7 +279,7 @@ export const generateRunWaves = (): WaveConfig[] => {
         const spawnRate = Math.max(5, 10 - Math.floor(difficulty * 0.2));
 
         if (isMission) {
-            const mType = MISSION_POOL[Math.floor(Math.random() * MISSION_POOL.length)];
+            const mType = fullPool[Math.floor(Math.random() * fullPool.length)];
             let param = 0;
             if (mType === MissionType.ELIMINATE) param = 3 + Math.floor(difficulty * 0.5);
             else if (mType === MissionType.KING_OF_THE_HILL) param = 720 + (difficulty * 30);

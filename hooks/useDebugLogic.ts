@@ -20,7 +20,7 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         sessionCurrencyRef,
         screenShakeRef,
         redFlashTimerRef,
-        
+
         setStatus,
         setShowDebug,
         setAugmentTarget,
@@ -32,9 +32,9 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         const opts: UpgradeOption[] = [];
         Object.values(BASE_WEAPONS).forEach(w => {
             const existing = player.weapons.find((pw: any) => pw.id === w.id);
-            
+
             if (existing && existing.level === 4) {
-                 opts.push({
+                opts.push({
                     id: `debug_${w.id}_augment`,
                     name: `${w.name} (Lvl 4 -> 5 AUGMENT)`,
                     description: "TRIGGER AUGMENT SELECTION",
@@ -49,17 +49,17 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
                 });
                 return;
             }
-    
-            const name = existing ? `${w.name} (Lvl ${existing.level} -> ${existing.level+1})` : `Add ${w.name}`;
+
+            const name = existing ? `${w.name} (Lvl ${existing.level} -> ${existing.level + 1})` : `Add ${w.name}`;
             opts.push({
                 id: `debug_${w.id}`, name, description: existing ? "Force level up" : "Force unlock/add", type: 'WEAPON_NEW', rarity: 'COMMON', color: w.color,
                 apply: (p) => {
-                     const weapon = p.weapons.find((pw: any) => pw.id === w.id);
-                     if (weapon) {
-                         weapon.level++;
-                         const progression = WEAPON_UPGRADE_TABLE[w.id]?.[weapon.level];
-                         if (progression) progression.apply(weapon); else weapon.damage *= 1.1;
-                     } else { p.weapons.push({ ...BASE_WEAPONS[w.id] }); }
+                    const weapon = p.weapons.find((pw: any) => pw.id === w.id);
+                    if (weapon) {
+                        weapon.level++;
+                        const progression = WEAPON_UPGRADE_TABLE[w.id]?.[weapon.level];
+                        if (progression) progression.apply(weapon); else weapon.damage *= 1.1;
+                    } else { p.weapons.push({ ...BASE_WEAPONS[w.id] }); }
                 }
             });
         });
@@ -82,32 +82,32 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         const cy = player.pos.y + Math.sin(angle) * dist;
 
         if (type === EnemyType.BOSS_TRINITY) {
-             const parts: EnemyType[] = [EnemyType.BOSS_TRINITY_CUBE, EnemyType.BOSS_TRINITY_PYRAMID, EnemyType.BOSS_TRINITY_ORB];
-             const spawnedParts: Enemy[] = [];
-             
-             parts.forEach((partType, i) => {
+            const parts: EnemyType[] = [EnemyType.BOSS_TRINITY_CUBE, EnemyType.BOSS_TRINITY_PYRAMID, EnemyType.BOSS_TRINITY_ORB];
+            const spawnedParts: Enemy[] = [];
+
+            parts.forEach((partType, i) => {
                 const offsetAngle = (i / 3) * Math.PI * 2;
                 const offsetR = 100;
                 const px = cx + Math.cos(offsetAngle) * offsetR;
                 const py = cy + Math.sin(offsetAngle) * offsetR;
-                
-                const enemy = spawnEnemy(player, partType, {x: px, y: py}, waveIndexRef.current + 1);
+
+                const enemy = spawnEnemy(player, partType, { x: px, y: py }, waveIndexRef.current + 1);
                 enemy.trinityData = {
                     role: i === 0 ? 'AGGRESSOR' : 'SUPPORT',
                     siblings: [],
                     type: i === 0 ? 'CUBE' : (i === 1 ? 'PYRAMID' : 'ORB')
                 };
                 spawnedParts.push(enemy);
-             });
-             
-             const ids = spawnedParts.map(e => e.id);
-             spawnedParts.forEach(e => {
-                 if (e.trinityData) e.trinityData.siblings = ids.filter(id => id !== e.id);
-             });
-             
-             addEnemies(spawnedParts);
-             particlesRef.current.push(createTextParticle({x: cx, y: cy}, "TRINITY SPAWNED", '#ff0000'));
-             return;
+            });
+
+            const ids = spawnedParts.map(e => e.id);
+            spawnedParts.forEach(e => {
+                if (e.trinityData) e.trinityData.siblings = ids.filter(id => id !== e.id);
+            });
+
+            addEnemies(spawnedParts);
+            particlesRef.current.push(createTextParticle({ x: cx, y: cy }, "TRINITY SPAWNED", '#ff0000'));
+            return;
         }
 
         const spawnPos = { x: cx, y: cy };
@@ -127,20 +127,20 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         missionEntitiesRef.current = entities;
         pickupsRef.current.push(...pickups);
         setWaveInfo((prev: any) => ({ ...prev, mission: { ...mission } }));
-        
+
         if (type === MissionType.THE_GREAT_FILTER) {
             audioEngine.setTheme('MIND_FLAYER');
             redFlashTimerRef.current = 120; // Trigger warning on debug start too
             screenShakeRef.current = 20;
         }
-        
+
         particlesRef.current.push(createTextParticle(playerRef.current.pos, `MISSION: ${type}`, '#00FFFF', 120));
     };
 
     const handleDebugPickup = (kind: string) => {
         const p = playerRef.current;
-        const pos = { x: p.pos.x + (Math.random()-0.5)*100, y: p.pos.y + (Math.random()-0.5)*100 };
-        
+        const pos = { x: p.pos.x + (Math.random() - 0.5) * 100, y: p.pos.y + (Math.random() - 0.5) * 100 };
+
         let pickup;
         if (kind === 'XP_SMALL') pickup = createXP(pos, 10);
         else if (kind === 'XP_LARGE') pickup = createXP(pos, 500);
@@ -151,7 +151,7 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         else if (kind === 'SUPPLY_DROP') pickup = createSupplyDrop(pos);
         else if (kind === 'MISSION_ITEM') pickup = createMissionPickup(pos, 'MISSION_ITEM');
         else if (kind === 'MISSION_ZONE') pickup = createMissionPickup(pos, 'MISSION_ZONE');
-        
+
         if (kind === 'EVENT_HORIZON') {
             projectilesRef.current.push(createEventHorizon(pos));
             particlesRef.current.push(createTextParticle(pos, "SPAWNED SINGULARITY", '#000000'));
@@ -163,7 +163,7 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
             particlesRef.current.push(createTextParticle(pos, "SPAWNED PRISM", '#FF00FF'));
             return;
         }
-        
+
         if (pickup) {
             pickupsRef.current.push(pickup);
             particlesRef.current.push(createTextParticle(pos, `SPAWNED ${kind}`, '#FFFFFF'));

@@ -1,7 +1,8 @@
-import { Entity, EntityType, EnemyType, Player, Enemy, Projectile, Pickup, Weapon, TextParticle, VisualParticle, Vector2, MissionEntity, Obstacle } from '../types';
+import { Entity, EntityType, EnemyType, Player, Enemy, Projectile, Pickup, Weapon, TextParticle, VisualParticle, Vector2, MissionEntity, Obstacle, Replica, PlayerStats } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, ZOOM_LEVEL, BALANCE } from '../constants';
-import { checkCollision } from './systems/PhysicsSystem';
+import { checkCollision } from './PhysicsSystem';
 import { WeaponStrategies } from './weapons/index';
+import { BASE_WEAPONS } from './gameData';
 import { getProjectile, getVisualParticle, getTextParticle } from './objectPools';
 import { ALL_ENEMIES_DB } from './data/enemies';
 // --- CHAIN LIGHTNING LOGIC ---
@@ -171,18 +172,23 @@ export const createProjectile = (
     return [];
 };
 
-export const createXP = (pos: Vector2, value: number): Pickup => ({
-    id: Math.random().toString(),
-    type: EntityType.PICKUP,
-    kind: 'XP',
-    pos: { ...pos },
-    velocity: { x: 0, y: 0 },
-    radius: 4,
-    color: '#33CCFF', // Neon Blue (Changed from #00FFFF Cyan)
-    value: value,
-    markedForDeletion: false,
-    magnetized: false
-});
+export const createXP = (pos: Vector2, value: number): Pickup => {
+    // Dynamic radius: Base 3.0 for value 1, scaling logarithmically up to max ~10
+    const radius = Math.min(10, 3.0 + Math.log10(Math.max(1, value)) * 2);
+
+    return {
+        id: Math.random().toString(),
+        type: EntityType.PICKUP,
+        kind: 'XP',
+        pos: { ...pos },
+        velocity: { x: 0, y: 0 },
+        radius: radius,
+        color: '#33CCFF', // Neon Blue
+        value: value,
+        markedForDeletion: false,
+        magnetized: false
+    };
+};
 
 export const createCurrency = (pos: Vector2, value: number): Pickup => ({
     id: Math.random().toString(),
@@ -289,6 +295,125 @@ export const createShatterParticles = (pos: Vector2, color: string, count: numbe
     return parts;
 };
 
+// --- POLYGON SHATTER LOGIC ---
+export const createPolygonShatterParticles = (enemy: Enemy): VisualParticle[] => {
+    const parts: VisualParticle[] = [];
+    const color = enemy.color;
+    const r = enemy.radius;
+    const rot = enemy.rotation || 0;
+
+    // 1. Define base 2D silhouette points for standard enemies
+    let basePoints: Vector2[] = [];
+
+    switch (enemy.enemyType) {
+        case EnemyType.LANCER:
+            basePoints = [
+                { x: r * 1.5, y: 0 },
+                { x: -r * 0.75, y: -r * 0.6 },
+                { x: -r * 0.75, y: r * 0.6 }
+            ];
+            break;
+        case EnemyType.TANK:
+            // Octagon
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+                basePoints.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+            }
+            break;
+        case EnemyType.DRONE:
+        case EnemyType.ELITE_DRONE:
+            // Diamond
+            basePoints = [
+                { x: 0, y: -r },
+                { x: r * 0.7, y: 0 },
+                { x: 0, y: r * 0.7 },
+                { x: -r * 0.7, y: 0 }
+            ];
+            break;
+        case EnemyType.SWARMER:
+            // Triangle Shards
+            basePoints = [
+                { x: 0, y: -r },
+                { x: r * 0.866, y: r * 0.5 },
+                { x: -r * 0.866, y: r * 0.5 }
+            ];
+            break;
+        case EnemyType.SENTINEL:
+            // Diamond
+            basePoints = [
+                { x: 0, y: -r * 1.2 },
+                { x: r * 1.2, y: 0 },
+                { x: 0, y: r * 1.2 },
+                { x: -r * 1.2, y: 0 }
+            ];
+            break;
+        default:
+            // Fallback: Hexagon
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2;
+                basePoints.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+            }
+            break;
+    }
+
+    // 2. Rotate points to match enemy's current rotation
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    const rotatedPoints: Vector2[] = basePoints.map(p => ({
+        x: p.x * cos - p.y * sin,
+        y: p.x * sin + p.y * cos
+    }));
+
+    // 3. Create shards by connecting center to adjacent edges
+    const center = { x: 0, y: 0 };
+    for (let i = 0; i < rotatedPoints.length; i++) {
+        const nextIdx = (i + 1) % rotatedPoints.length;
+        const p1 = rotatedPoints[i];
+        const p2 = rotatedPoints[nextIdx];
+
+        // The physics center of the shard
+        const shardCenterX = (center.x + p1.x + p2.x) / 3;
+        const shardCenterY = (center.y + p1.y + p2.y) / 3;
+
+        // Shift polygon vertices so the shard's "center" is at 0,0 locally
+        const poly: Vector2[] = [
+            { x: center.x - shardCenterX, y: center.y - shardCenterY },
+            { x: p1.x - shardCenterX, y: p1.y - shardCenterY },
+            { x: p2.x - shardCenterX, y: p2.y - shardCenterY }
+        ];
+
+        // Explosion velocity outward from the enemy center, plus some random scatter
+        const scatterAngle = Math.random() * Math.PI * 2;
+        const scatterMag = Math.random() * 2;
+        const spd = 2 + Math.random() * 3;
+        const vx = shardCenterX * 0.1 * spd + Math.cos(scatterAngle) * scatterMag;
+        const vy = shardCenterY * 0.1 * spd + Math.sin(scatterAngle) * scatterMag;
+
+        parts.push(getVisualParticle({
+            id: Math.random().toString(),
+            type: EntityType.VISUAL_PARTICLE,
+            pos: { x: enemy.pos.x + shardCenterX, y: enemy.pos.y + shardCenterY },
+            velocity: { x: vx, y: vy },
+            radius: 0, // Not used for collision
+            color: color,
+            markedForDeletion: false,
+            life: 40 + Math.random() * 20,
+            maxLife: 60,
+            size: 1, // acts as scale multiplier if needed
+            decay: 0.94,
+            shape: 'POLYGON',
+            polygon: poly,
+            rotation: 0,
+            rotationSpeed: (Math.random() - 0.5) * 0.4
+        }));
+    }
+
+    // Add a few generic particles for extra juice
+    parts.push(...createShatterParticles(enemy.pos, color, 4, r * 0.5));
+
+    return parts;
+};
+
 export const createBossDeathExplosion = (pos: Vector2): Projectile[] => {
     // Massive damage burst
     return [
@@ -384,9 +509,10 @@ export const createStasisFieldPickup = (pos: Vector2): Pickup => ({
     magnetized: false
 });
 
-export const createMissionEntity = (pos: Vector2, kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON'): MissionEntity => {
+export const createMissionEntity = (pos: Vector2, kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON' | 'SOLAR_SHIELD' | 'ALLY'): MissionEntity => {
     let radius = 100;
     let color = '#00FF00';
+    let isSolid = false;
     if (kind === 'PAYLOAD') { radius = 25; color = '#00FFFF'; } // Updated to Cyan
     if (kind === 'OBELISK') { radius = 30; color = '#00FF00'; }
     if (kind === 'STATION') { radius = 60; color = '#FFFFFF'; }
@@ -394,6 +520,8 @@ export const createMissionEntity = (pos: Vector2, kind: 'ZONE' | 'PAYLOAD' | 'OB
     if (kind === 'SYNC_GOAL') { radius = 40; color = '#00FFFF'; }
     if (kind === 'FILTER_WAVE') { radius = 0; color = '#00FFFF'; }
     if (kind === 'EVENT_HORIZON') { radius = 40; color = '#000000'; } // Visual radius of the black hole core
+    if (kind === 'SOLAR_SHIELD') { radius = 60; color = '#FFD700'; isSolid = true; } // Gold/Orange Shield
+    if (kind === 'ALLY') { radius = 15; color = '#00AAFF'; } // Blue Ally
 
     return {
         id: Math.random().toString(),
@@ -406,7 +534,8 @@ export const createMissionEntity = (pos: Vector2, kind: 'ZONE' | 'PAYLOAD' | 'OB
         markedForDeletion: false,
         health: 100,
         maxHealth: 100,
-        active: false
+        active: false,
+        solid: isSolid
     };
 };
 
@@ -422,5 +551,61 @@ export const createMissionPickup = (pos: Vector2, kind: 'MISSION_ITEM' | 'MISSIO
         value: 0,
         markedForDeletion: false,
         magnetized: false
+    };
+};
+
+
+export const createAllyReplica = (pos: Vector2, offset: Vector2, playerStats: PlayerStats, allyClass: 'ASSAULT' | 'SNIPER' | 'SUPPORT' = 'ASSAULT'): Replica => {
+    let weapon: Weapon;
+    let color = '#00AAFF';
+    let radius = 12;
+
+    if (allyClass === 'SNIPER') {
+        weapon = { ...BASE_WEAPONS.spirit_lance };
+        weapon.damage *= 2.5; // High damage
+        weapon.speed *= 2.0;  // Fast projectile
+        weapon.cooldown = 120; // Slow fire
+        weapon.currentCooldown = 0;
+        weapon.id = 'ally_sniper';
+        weapon.color = '#00FF88';
+        color = '#00FF88';
+    } else if (allyClass === 'SUPPORT') {
+        weapon = { ...BASE_WEAPONS.cyber_kora }; // Wide cone
+        weapon.damage *= 0.8;
+        weapon.count = 3; // Reduced from base+2 to fixed 3
+        weapon.area *= 1.2; // Slightly wider
+        weapon.cooldown = 60; // Force meaningful cooldown (1s) to prevent spam
+        weapon.currentCooldown = 0;
+        weapon.id = 'ally_support';
+        weapon.color = '#FF8800';
+        color = '#FF8800';
+        radius = 16;
+    } else {
+        // ASSAULT (Green Icosahedron)
+        weapon = { ...BASE_WEAPONS.spirit_lance };
+        weapon.damage *= 0.6;
+        weapon.cooldown = 15; // Rapid fire
+        weapon.currentCooldown = 0;
+        weapon.count = 1;
+        weapon.id = 'ally_assault';
+        weapon.color = '#00FF88'; // Green projectiles
+        color = '#00FF88'; // Green Ship
+    }
+
+    return {
+        id: Math.random().toString(),
+        type: EntityType.PLAYER, // Visually looks like player
+        pos: { ...pos },
+        velocity: { x: 0, y: 0 },
+        radius,
+        color,
+        markedForDeletion: false,
+        rotation: 0,
+        weapons: [weapon],
+        stats: { ...playerStats },
+        lifeTime: 999999, // Infinite until mission end
+        isAlly: true,
+        isSpectral: true,
+        formationOffset: offset
     };
 };

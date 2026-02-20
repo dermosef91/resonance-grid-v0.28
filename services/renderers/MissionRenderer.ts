@@ -1,13 +1,13 @@
 
-import { MissionEntity, Player } from '../../types';
-import { project3D, drawLightningBolt } from '../renderUtils';
+import { MissionEntity, Player, MissionState } from '../../types';
+import { project3D, drawLightningBolt, hexToRgba } from '../renderUtils';
 import { drawPlayer, drawPlayerMesh } from './playerRenderer';
 
 export const drawMissionEntity = (
     ctx: CanvasRenderingContext2D,
     e: MissionEntity,
     frame: number,
-    missionProgress?: { current: number, total: number },
+    missionProgress?: MissionState | { current: number, total: number },
     player?: Player
 ) => {
     if (!Number.isFinite(e.pos.x) || !Number.isFinite(e.pos.y)) return;
@@ -24,8 +24,10 @@ export const drawMissionEntity = (
         // --- HOLO-PROJECTOR MONOLITH (King of the Hill) ---
         const t = frame * 0.02;
         const isActive = e.active; // Player inside
-        const progress = (missionProgress && missionProgress.total > 0)
-            ? Math.min(1, Math.max(0, missionProgress.current / missionProgress.total))
+        const currentVal = missionProgress ? ('progress' in missionProgress ? missionProgress.progress : (missionProgress as any).current) : 0;
+        const totalVal = missionProgress ? ('total' in missionProgress ? missionProgress.total : (missionProgress as any).total) : 1;
+        const progress = (missionProgress && totalVal > 0)
+            ? Math.min(1, Math.max(0, currentVal / totalVal))
             : 0;
 
         const mainColor = isActive ? '#00FF00' : '#FFD700'; // Green (Active) vs Gold (Inactive)
@@ -803,7 +805,9 @@ export const drawMissionEntity = (
             ctx.rotate(t * layer.speed * (i % 2 === 0 ? 1 : -1));
 
             const r1 = coreScale;
-            const r2 = coreScale * layer.size;
+            // Bloom Effect: If opacity < 1 (buildup), scale r2 from coreScale to full size
+            const bloomProgress = e.opacity !== undefined ? e.opacity : 1.0;
+            const r2 = coreScale * (1 + (layer.size - 1) * bloomProgress);
 
             // Check for valid gradient params
             if (Number.isFinite(r1) && r1 >= 0 && Number.isFinite(r2) && r2 >= 0) {
@@ -840,6 +844,284 @@ export const drawMissionEntity = (
             ctx.arc(0, 0, distR, 0, Math.PI * 2);
             ctx.stroke();
         }
+    } else if (e.kind === 'ALLY') {
+
+        // --- TRAPPED ALLY (STASIS POD) ---
+        const t = frame * 0.05;
+        const allyClass = e.customData?.allyClass || 'ASSAULT';
+        let color = '#00AAFF'; // Default Assault
+        if (allyClass === 'SNIPER') color = '#00FF88';
+        else if (allyClass === 'SUPPORT') color = '#FF8800';
+
+        // 1. Stasis Field (Spinning Rings)
+        const pulse = 1 + Math.sin(t * 2) * 0.1;
+
+        ctx.save();
+        ctx.scale(1, 0.5); // Perspective
+
+        // Outer Ring
+        ctx.beginPath();
+        ctx.arc(0, 0, 40 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([10, 5]);
+        ctx.lineDashOffset = frame;
+        ctx.stroke();
+
+        // Inner Ring (Counter Rotate)
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, 0, Math.PI * 2);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.lineDashOffset = -frame;
+        ctx.stroke();
+
+        ctx.restore();
+
+        // 2. The Pod/Cage (3D Dodecahedron Field)
+        const rotX = t * 0.5;
+        const rotY = t * 0.3;
+        const rCage = 35;
+
+        // Golden Ratio
+        const phi = (1 + Math.sqrt(5)) / 2;
+
+        // Dodecahedron Vertices (20 points)
+        // (±1, ±1, ±1)
+        // (0, ±1/phi, ±phi)
+        // (±1/phi, ±phi, 0)
+        // (±phi, 0, ±1/phi)
+        const verts = [];
+        // Orange vertices (±1, ±1, ±1)
+        for (let x of [-1, 1]) for (let y of [-1, 1]) for (let z of [-1, 1]) verts.push({ x, y, z });
+        // Green vertices (0, ±1/phi, ±phi)
+        for (let y of [-1 / phi, 1 / phi]) for (let z of [-phi, phi]) verts.push({ x: 0, y, z });
+        // Blue vertices (±1/phi, ±phi, 0)
+        for (let x of [-1 / phi, 1 / phi]) for (let y of [-phi, phi]) verts.push({ x, y, z: 0 });
+        // Pink vertices (±phi, 0, ±1/phi)
+        for (let x of [-phi, phi]) for (let z of [-1 / phi, 1 / phi]) verts.push({ x, y: 0, z });
+
+        // Scale vertices
+        const scaledVerts = verts.map(v => ({ x: v.x * rCage * 0.6, y: v.y * rCage * 0.6, z: v.z * rCage * 0.6 }));
+
+        // Project
+        const projVerts = scaledVerts.map(v => project3D(v.x, v.y, v.z, rotX, rotY, frame * 0.01, 300));
+
+        // Connect nearby vertices to form edges (Distance based approach simplifes manual indexing)
+        // Edge length in ideal dodecahedron with scale 1 is 2/phi = 1.236...
+        // We scaled by rCage * 0.6. 
+        // Max distance for connection check:
+        const connectDist = (2 / phi) * rCage * 0.6 * 1.1; // 10% tolerance
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        // Naive distance check for wireframe (O(N^2) but N=20 is tiny)
+        for (let i = 0; i < scaledVerts.length; i++) {
+            for (let j = i + 1; j < scaledVerts.length; j++) {
+                const d = Math.sqrt(
+                    (scaledVerts[i].x - scaledVerts[j].x) ** 2 +
+                    (scaledVerts[i].y - scaledVerts[j].y) ** 2 +
+                    (scaledVerts[i].z - scaledVerts[j].z) ** 2
+                );
+                if (d < connectDist) {
+                    ctx.moveTo(projVerts[i].x, projVerts[i].y);
+                    ctx.lineTo(projVerts[j].x, projVerts[j].y);
+                }
+            }
+        }
+        ctx.stroke();
+
+        // Fill Faces (Transparent)
+        // Hard to do strictly correct without depth sort, but a faint fill helps volume
+        ctx.fillStyle = hexToRgba(color, 0.1);
+        // Draw a hull or simple shape to simulate fill
+        ctx.beginPath();
+        ctx.arc(0, 0, rCage * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+
+
+
+    } else if (e.kind === 'SOLAR_SHIELD') {
+        const solarData = (missionProgress as any)?.customData?.solarData || (missionProgress as any)?.solarData; // Fallback for safety
+        const state = solarData?.state || 'CALM';
+        const sunAngle = solarData?.sunAngle || 0;
+
+        // --- 2. BLACK SHINY OBELISK ---
+        // Shape: Tapered square monolith.
+        const height = 240; // Taller to be more imposing
+        const sides = 4; // Square base for Obelisk look
+
+        const baseRadius = e.radius; // Base width
+        const topRadius = e.radius * 0.35; // More tapered
+
+        const rotationOffset = Math.PI / 4; // Align flat face to viewer
+
+        const pointsBottom: { x: number, y: number }[] = [];
+        const pointsTop: { x: number, y: number }[] = [];
+
+        for (let i = 0; i < sides; i++) {
+            const th = (i / sides) * Math.PI * 2 + rotationOffset;
+            pointsBottom.push({
+                x: Math.cos(th) * baseRadius,
+                y: Math.sin(th) * baseRadius
+            });
+            pointsTop.push({
+                x: Math.cos(th) * topRadius,
+                y: Math.sin(th) * topRadius - height
+            });
+        }
+
+        ctx.save();
+
+        // --- 1. SHADOW / SAFETY ZONE (Holographic Floor) ---
+        // Draw this BEFORE the 3D object so it looks like it's on the floor
+        if (state === 'WARNING' || state === 'STORM') {
+            const shadowLen = 800;
+            const shadowDirX = -Math.cos(sunAngle);
+            const shadowDirY = -Math.sin(sunAngle);
+
+            // Construct Convex Hull of Shadow (Base + Projected Base)
+            const shadowPoints: { x: number, y: number }[] = [
+                ...pointsBottom,
+                ...pointsBottom.map(p => ({ x: p.x + shadowDirX * shadowLen, y: p.y + shadowDirY * shadowLen }))
+            ];
+
+            // Monotone Chain Convex Hull Algorithm for 8 points
+            shadowPoints.sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+
+            const lower: { x: number, y: number }[] = [];
+            for (let i = 0; i < shadowPoints.length; i++) {
+                while (lower.length >= 2) {
+                    const p1 = lower[lower.length - 2];
+                    const p2 = lower[lower.length - 1];
+                    const p3 = shadowPoints[i];
+                    if ((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x) <= 0) {
+                        lower.pop();
+                    } else {
+                        break;
+                    }
+                }
+                lower.push(shadowPoints[i]);
+            }
+
+            const upper: { x: number, y: number }[] = [];
+            for (let i = shadowPoints.length - 1; i >= 0; i--) {
+                while (upper.length >= 2) {
+                    const p1 = upper[upper.length - 2];
+                    const p2 = upper[upper.length - 1];
+                    const p3 = shadowPoints[i];
+                    if ((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x) <= 0) {
+                        upper.pop();
+                    } else {
+                        break;
+                    }
+                }
+                upper.push(shadowPoints[i]);
+            }
+
+            upper.pop();
+            lower.pop();
+            const hull = lower.concat(upper);
+
+            ctx.beginPath();
+            hull.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.closePath();
+
+            // Gradient
+            const grad = ctx.createLinearGradient(0, 0, shadowDirX * shadowLen, shadowDirY * shadowLen);
+
+            if (state === 'STORM') {
+                grad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+                ctx.fillStyle = grad;
+                ctx.fill();
+            } else {
+                grad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+        }
+
+
+
+        // --- 2. BLACK SHINY OBELISK ---
+        // Draw Sides - Manual Depth Sort for Convex Shape
+        // Define faces
+        type Face = { index: number, z: number, p: any[] };
+        const faces: Face[] = [];
+
+        for (let i = 0; i < sides; i++) {
+            const p1 = pointsBottom[i];
+            const p2 = pointsBottom[(i + 1) % sides];
+            // Average Y acts as depth
+            const avgY = (p1.y + p2.y) / 2;
+            faces.push({ index: i, z: avgY, p: [p1, p2, pointsTop[(i + 1) % sides], pointsTop[i]] });
+        }
+
+        // Sort: Furthest (Lowest Y? No, Highest Y is Closer in standard grid) 
+        // We look from "South" (Bottom). So "North" (Top/Negative Y) is further away.
+        // We want to draw the back faces first. 
+        // Back faces have lower Y values (more negative).
+        faces.sort((a, b) => a.z - b.z); // Draw Smallest Y (Furthest) first
+
+        faces.forEach(f => {
+            const [p1, p2, p3, p4] = f.p;
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y);
+            ctx.lineTo(p4.x, p4.y);
+            ctx.closePath();
+
+            // Gradient for "Shiny" look
+            const grad = ctx.createLinearGradient(p1.x, p1.y, p4.x, p4.y);
+            grad.addColorStop(0, '#050505');
+            grad.addColorStop(0.4, '#151515');
+            grad.addColorStop(1, '#000000');
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Edges
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Highlights - Only on faces 1 and 2 (Front facing in this rotation)
+            if (f.index === 1 || f.index === 2) {
+                // Shiny Reflection
+                ctx.save();
+                ctx.clip();
+
+                // Reflection Streak
+                const refGrad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+                refGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                refGrad.addColorStop(0.5, 'rgba(200,230,255,0.15)');
+                refGrad.addColorStop(1, 'rgba(255,255,255,0)');
+
+                ctx.fillStyle = refGrad;
+                ctx.fillRect(-100, -300, 200, 300);
+                ctx.restore();
+            }
+        });
+
+
+
+
+        ctx.restore();
     }
 
     ctx.globalAlpha = 1.0;

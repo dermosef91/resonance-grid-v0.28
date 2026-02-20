@@ -63,11 +63,11 @@ export const updateProjectiles = (
                     enemies.forEach(e => {
                         if (!e.markedForDeletion && isPointInPolygon(e.pos, polygon)) {
                             e.health -= 9999;
-                            result.newParticles.push(createTextParticle(e.pos, "VOID CRUSH", '#4B0082', 60));
+                            // result.newParticles.push(createTextParticle(e.pos, "VOID CRUSH", '#4B0082', 60));
                         }
                     });
                     result.screenShake += 10;
-                    result.newParticles.push(createTextParticle(head.pos, "ABYSSAL LOOP", '#8A2BE2', 90));
+                    // result.newParticles.push(createTextParticle(head.pos, "ABYSSAL LOOP", '#8A2BE2', 90));
                     result.newShockwaves.push({ id: Math.random().toString(), pos: { ...head.pos }, time: 0, maxDuration: 60, maxRadius: 500, strength: 80 });
                     loopNodes.forEach(n => n.markedForDeletion = true);
                     result.newProjectiles.push(getProjectile({ id: Math.random().toString(), type: EntityType.PROJECTILE, pos: { x: head.pos.x, y: head.pos.y }, velocity: { x: 0, y: 0 }, radius: 0, color: '#000000', markedForDeletion: false, damage: 500, duration: 60, pierce: 999, knockback: 0, isEnemy: false, sourceWeaponId: 'abyssal_loop_collapse', polyPoints: polygon }));
@@ -541,6 +541,32 @@ export const updateProjectiles = (
                 p.velocity.x = Math.cos(newAngle) * speed; p.velocity.y = Math.sin(newAngle) * speed;
             }
             p.pos.x += p.velocity.x; p.pos.y += p.velocity.y; p.duration--;
+        } else if (p.customData?.augment === 'ACOUSTIC_BARRIER') {
+            // ACOUSTIC BARRIER LOGIC
+            // Stop at max range and become a wall
+            const origin = p.customData.origin;
+            const maxDist = p.customData.maxDist || 350;
+
+            if (!p.customData.isBarrier && origin) {
+                const dx = p.pos.x - origin.x;
+                const dy = p.pos.y - origin.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq >= maxDist * maxDist) {
+                    p.velocity = { x: 0, y: 0 };
+                    p.customData.isBarrier = true;
+                    // Wall phase initiated
+                } else {
+                    // Standard movement until max range
+                    p.pos.x += p.velocity.x;
+                    p.pos.y += p.velocity.y;
+                }
+            } else {
+                // Is Barrier: Stay still
+                p.velocity = { x: 0, y: 0 };
+            }
+
+            p.duration--;
         } else if (!p.paradoxData) {
             // Standard Movement for simple projectiles
             p.pos.x += p.velocity.x; p.pos.y += p.velocity.y; p.duration--;

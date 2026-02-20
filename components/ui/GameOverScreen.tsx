@@ -1,33 +1,136 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NeonButton, CurrencyDisplay, IconFrame, OverlayContainer } from '../Common';
 import { useMenuNav } from '../../hooks/useMenuNav';
-import { BASE_WEAPONS, BASE_ARTIFACTS } from '../../services/gameData';
+import { GameOverUnlockedItem } from '../../types';
 import { adManager } from '../../services/AdManager';
+import { audioEngine } from '../../services/audioEngine';
 
-export const GameOverScreen: React.FC<{ 
-    score: number, 
+
+export const GameOverScreen: React.FC<{
+    score: number,
     level: number,
     wave: number,
+    kills: number,
+    duration: number,
     chipsEarned: number,
     currency: number,
-    newUnlocks: string[], 
-    newAvailable: string[], 
-    onRestart: () => void, 
+    metaState: any, // Using any temporarily to avoid circular deps if types not ready, but better import MetaState
+    newUnlocks: GameOverUnlockedItem[],
+    newAvailable: GameOverUnlockedItem[],
+    onRestart: () => void,
     openStore: () => void,
     onDoubleReward?: () => void
-}> = ({ score, level, wave, chipsEarned, currency, newUnlocks, newAvailable, onRestart, openStore, onDoubleReward }) => {
+}> = ({ score, level, wave, kills, duration, chipsEarned, currency, metaState, newUnlocks, newAvailable, onRestart, openStore, onDoubleReward }) => {
     const [adLoading, setAdLoading] = useState(false);
     const [adWatched, setAdWatched] = useState(false);
+
+
+
+
+
+
+
+
+
+    const [displayChips, setDisplayChips] = useState(0);
+    const [visibleUnlocks, setVisibleUnlocks] = useState<GameOverUnlockedItem[]>([]);
+    const [showButtons, setShowButtons] = useState(false);
+    const [isFirstShopView, setIsFirstShopView] = useState(false);
+
+    useEffect(() => {
+        const key = 'hasSeenUpgradeButtonV1';
+        if (localStorage.getItem(key) !== 'true') {
+            setIsFirstShopView(true);
+            localStorage.setItem(key, 'true');
+        }
+    }, []);
+
+    const animationFrameRef = useRef<number>();
+    const unlockIntervalRef = useRef<NodeJS.Timeout>();
+
+    // Initial Animation Sequence
+    useEffect(() => {
+        // 1. Animate Chips
+        let startTimestamp: number;
+        const duration = 1500; // 1.5s to count chips
+        const step = (timestamp: number) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+
+            // Ease out quart
+            const ease = 1 - Math.pow(1 - progress, 4);
+            const current = Math.floor(ease * chipsEarned);
+
+            setDisplayChips(current);
+
+            // Play sound every few frames if value changed significantly
+            if (current % 5 === 0 && progress < 1.0) {
+                audioEngine.playCollectXP();
+            }
+
+            if (progress < 1) {
+                animationFrameRef.current = window.requestAnimationFrame(step);
+            } else {
+                // Chips done, trigger unlocks
+                triggerUnlocks();
+            }
+        };
+        animationFrameRef.current = window.requestAnimationFrame(step);
+
+        // Cleanup
+        return () => {
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            if (unlockIntervalRef.current) clearInterval(unlockIntervalRef.current);
+        };
+    }, [chipsEarned]);
+
+    const triggerUnlocks = () => {
+        // Clear any existing interval just in case
+        if (unlockIntervalRef.current) clearInterval(unlockIntervalRef.current);
+
+        // Filter out any undefined or empty strings and deduplicate by ID
+        const rawUnlocks = [...safeUnlocks, ...safeAvailable].filter(item => item && item.id);
+        const uniqueUnlocks = Array.from(new Map(rawUnlocks.map(item => [item.id, item])).values());
+
+        if (uniqueUnlocks.length === 0) {
+            setShowButtons(true);
+            return;
+        }
+
+        let currentIndex = 0;
+        unlockIntervalRef.current = setInterval(() => {
+            if (currentIndex >= uniqueUnlocks.length) {
+                if (unlockIntervalRef.current) clearInterval(unlockIntervalRef.current);
+                setShowButtons(true);
+                return;
+            }
+
+            // Add next unlock
+            const itemToAdd = uniqueUnlocks[currentIndex];
+            setVisibleUnlocks(prev => {
+                // Double check it's not already in (React double-invocation safety)
+                if (prev.some(p => p.id === itemToAdd.id)) return prev;
+                return [...prev, itemToAdd];
+            });
+            // Play unlock sound
+            audioEngine.playCollectXP();
+
+            currentIndex++;
+        }, 500); // 0.5s per unlock
+    };
 
     const canShop = currency > 0;
     // Only show ad button if native platform and callback exists and not watched
     const canWatchAd = onDoubleReward && !adWatched && adManager.isNative;
 
-    let itemCount = 1; 
+    let itemCount = 1;
     if (canWatchAd) itemCount++;
     if (canShop) itemCount++;
-    
+    // Defensive defaults
+    const safeChips = chipsEarned || 0;
+    const safeUnlocks = newUnlocks || [];
+    const safeAvailable = newAvailable || [];
+
     const handleAdClick = async () => {
         if (adLoading || adWatched || !canWatchAd) return;
         setAdLoading(true);
@@ -35,23 +138,25 @@ export const GameOverScreen: React.FC<{
         setAdLoading(false);
         if (success) {
             setAdWatched(true);
-            onDoubleReward();
+            if (onDoubleReward) onDoubleReward();
         }
     };
 
     const selectedIndex = useMenuNav(itemCount, (idx) => {
+        if (!showButtons) return; // Disable nav during animation
+
         let currentIndex = 0;
-        
+
         if (canWatchAd) {
             if (idx === currentIndex) { handleAdClick(); return; }
             currentIndex++;
         }
-        
+
         if (canShop) {
             if (idx === currentIndex) { openStore(); return; }
             currentIndex++;
         }
-        
+
         if (idx === currentIndex) onRestart();
     });
 
@@ -67,9 +172,9 @@ export const GameOverScreen: React.FC<{
 
     return (
         <OverlayContainer zIndex={50} className="bg-red-900/20 overflow-y-auto">
-            <div className="bg-black border border-orange-500 p-8 max-w-lg w-full text-center my-8 relative">
-                <h2 className="text-5xl font-bold text-white mb-8">RUN COMPLETE</h2>
-                
+            <div className="bg-black border border-orange-500 p-8 max-w-2xl w-full text-center my-8 relative">
+                <h2 className="text-5xl font-bold text-white mb-8 animate-in zoom-in duration-500">RUN COMPLETE</h2>
+
                 <div className="grid grid-cols-2 gap-4 mb-8 border-t border-b border-gray-800 py-6">
                     <div className="flex flex-col items-center justify-center border-r border-gray-800">
                         <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Wave Reached</div>
@@ -77,34 +182,61 @@ export const GameOverScreen: React.FC<{
                     </div>
                     <div className="flex flex-col items-center justify-center">
                         <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Chips</div>
-                        <CurrencyDisplay amount={chipsEarned} size="lg" />
+                        <CurrencyDisplay amount={displayChips} size="lg" />
                     </div>
                 </div>
 
-                {(newUnlocks.length > 0 || newAvailable.length > 0) && (
-                    <div className="mb-8 text-left">
-                        <h3 className="text-orange-500 font-bold uppercase tracking-widest text-sm mb-2">Unlocked Upgrades</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {newUnlocks.map(id => (
-                                <div key={id} className="flex items-center gap-2 bg-gray-900 border border-green-900 px-2 py-1">
-                                    <IconFrame id={id} color="#4ade80" size="xs" />
-                                    <span className="text-xs text-green-400 font-bold uppercase">{BASE_WEAPONS[id]?.name || BASE_ARTIFACTS[id]?.name || id}</span>
-                                </div>
-                            ))}
-                            {newAvailable.map(id => (
-                                <div key={id} className="flex items-center gap-2 bg-gray-900 border border-yellow-900 px-2 py-1 opacity-75">
-                                    <IconFrame id={id} color="#fbbf24" size="xs" />
-                                    <span className="text-xs text-yellow-500 font-bold uppercase">{BASE_WEAPONS[id]?.name || BASE_ARTIFACTS[id]?.name || id} (SHOP)</span>
-                                </div>
-                            ))}
+                {(visibleUnlocks.length > 0) && (
+                    <div className="mb-10 w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <h3 className="text-orange-500 font-bold uppercase tracking-[0.2em] text-sm mb-6 text-center animate-pulse">Unlocked Upgrades</h3>
+                        <div className="flex flex-wrap justify-center gap-4">
+                            {visibleUnlocks.map((item, index) => {
+                                if (!item) return null;
+                                const isNew = newUnlocks.some(u => u && u.id === item.id);
+
+                                return (
+                                    <div
+                                        key={item.id}
+                                        onClick={openStore}
+                                        className={`
+                                            relative flex flex-col items-center p-4 min-w-[140px] cursor-pointer hover:bg-gray-800 transition-colors
+                                            bg-gray-900 border-2 
+                                            ${isNew ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.4)] scale-110 z-10' : 'border-yellow-700'} 
+                                            animate-in zoom-in-0 fade-in slide-in-from-bottom-12 duration-500 fill-mode-backwards
+                                        `}
+                                        style={{ animationDelay: `${index * 150}ms` }}
+                                    >
+                                        {/* New Badge */}
+                                        {isNew && (
+                                            <div className="absolute top-2 right-2 text-[10px] font-mono text-purple-400 border border-purple-900/50 px-1.5 py-0.5 bg-black/50 tracking-widest z-20">
+                                                NEW
+                                            </div>
+                                        )}
+
+                                        <div className="mb-3 transform hover:scale-125 transition-transform duration-300">
+                                            <IconFrame id={item.id} color={isNew ? "#d8b4fe" : "#fbbf24"} size="lg" className={isNew ? "animate-pulse" : ""} />
+                                        </div>
+
+                                        <div className="text-center">
+                                            <div className={`text-sm font-bold uppercase mb-1 ${isNew ? 'text-purple-300' : 'text-yellow-500'}`}>
+                                                {item.name}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 font-mono uppercase">
+                                                {isNew ? 'UNLOCKED' : 'IN SHOP'}
+                                            </div>
+                                            {/* Item Preview Tooltip could go here */}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
 
-                <div className="flex flex-col gap-3">
-                    
+                <div className={`flex flex-col gap-3 transition-opacity duration-1000 ${showButtons ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+
                     {canWatchAd && (
-                        <div className="mb-4 animate-in slide-in-from-left-10 duration-300">
+                        <div className="mb-4">
                             <NeonButton
                                 onClick={handleAdClick}
                                 variant="secondary"
@@ -125,10 +257,11 @@ export const GameOverScreen: React.FC<{
                                 <span>to get permanent upgrades for your next runs</span>
                             </div>
 
-                            <NeonButton 
+                            <NeonButton
                                 onClick={openStore}
                                 variant={selectedIndex === getButtonIndex('SHOP') ? 'primary' : 'secondary'}
                                 fullWidth
+                                className={isFirstShopView ? "animate-pulse shadow-[0_0_20px_rgba(234,88,12,0.8)]" : ""}
                             >
                                 <span>Get Upgrades</span>
                                 <span className={`text-sm mx-2 ${selectedIndex === getButtonIndex('SHOP') ? 'text-black/60' : 'text-gray-600'}`}>|</span>

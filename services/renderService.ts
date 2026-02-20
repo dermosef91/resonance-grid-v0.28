@@ -1,5 +1,5 @@
 
-import { Enemy, Player, Projectile, Pickup, TextParticle, EntityType, VisualParticle, MissionEntity, MissionType, ColorPalette, Vector2, Shockwave, EnemyType, Replica, Obstacle } from '../types';
+import { Enemy, Player, Projectile, Pickup, TextParticle, EntityType, VisualParticle, MissionEntity, MissionType, ColorPalette, Vector2, Shockwave, EnemyType, Replica, Obstacle, MissionState } from '../types';
 import { COLORS, ZOOM_LEVEL } from '../constants';
 import { EnemyRenderRegistry } from './renderers';
 import { project3D, hexToRgba, parseColorToRgb, drawLightningBolt } from './renderUtils';
@@ -60,7 +60,7 @@ export const renderGame = (
     targets?: { pos: { x: number, y: number }, color: string, label?: string }[],
     missionEntities: MissionEntity[] = [],
     wallX?: number,
-    missionProgress?: { current: number, total: number },
+    missionProgress?: MissionState | { current: number, total: number },
     activeMissionType?: MissionType,
     glitchIntensity: number = 0,
     palette: ColorPalette = {
@@ -194,18 +194,21 @@ export const renderGame = (
 
             const rgb = parseColorToRgb(p.color);
             if (rgb) {
-                let intensity = 0.5;
-                let rad = lightRad;
+                // Baseline dynamic pulse using id length as a simple "seed" since it's a string
+                const seed = p.id.length + (p.id.charCodeAt(0) || 0);
+                const pulse = Math.sin(frame * 0.15 + seed) * 0.2;
+                let intensity = 0.8 + pulse; // Increased base intensity from 0.5 to 0.8
+                let rad = Math.max(150, p.radius * 3 + 60); // Increased base radius from 80 to 150
 
                 if (p.sourceWeaponId === 'void_aura') {
-                    intensity = 1.5;
-                    rad = Math.max(200, p.radius * 2.5 + 100);
+                    intensity = 1.8 + pulse;
+                    rad = Math.max(250, p.radius * 2.5 + 100);
                 } else if (p.sourceWeaponId === 'solar_chakram') {
-                    intensity = 1.2;
-                    rad = Math.max(180, p.radius * 2.5 + 60);
+                    intensity = 1.5 + pulse;
+                    rad = Math.max(220, p.radius * 2.5 + 60);
                 } else if (p.isEnemy) {
-                    intensity = 1.2;
-                    rad = Math.max(120, p.radius * 4 + 50);
+                    intensity = 1.4 + pulse; // Enemies cast harsher light
+                    rad = Math.max(180, p.radius * 4 + 70);
                 }
 
                 lightSources.push({
@@ -284,7 +287,8 @@ export const renderGame = (
                     e.enemyType === EnemyType.LASER_LOTUS ||
                     e.enemyType === EnemyType.GHOST ||
                     e.enemyType === EnemyType.MANDELBROT_MITE ||
-                    e.enemyType === EnemyType.SWARMER) {
+                    e.enemyType === EnemyType.SWARMER ||
+                    e.enemyType === EnemyType.DRONE) {
                     isGlowing = true;
                 }
 
@@ -328,17 +332,27 @@ export const renderGame = (
                 let intensity = 0.4;
                 let radius = 60;
 
+                let r = rgb.r;
+                let g = rgb.g;
+                let b = rgb.b;
+
                 if (p.kind === 'SUPPLY_DROP') { intensity = 0.8; radius = 200; }
                 else if (p.kind === 'MISSION_ITEM' || p.kind === 'MISSION_ZONE') { intensity = 0.9; radius = 180; }
                 else if (p.kind === 'HEALTH') { intensity = 0.6; radius = 90; }
                 else if (p.kind === 'TIME_CRYSTAL') { intensity = 1.0; radius = 150; }
                 else if (p.kind === 'STASIS_FIELD') { intensity = 1.5; radius = 180; }
                 else if (p.kind === 'KALEIDOSCOPE') { intensity = 1.5; radius = 180; }
+                else if (p.kind === 'XP') {
+                    intensity = 1.0; // Less strong (was 2.0)
+                    radius = 120; // Slightly smaller radius to tighten the feel
+                    // Override color to be "More Blue" (Deep Blue instead of Cyan)
+                    r = 0; g = 60; b = 255;
+                }
 
                 lightSources.push({
                     x: p.pos.x,
                     y: p.pos.y,
-                    r: rgb.r, g: rgb.g, b: rgb.b,
+                    r: r, g: g, b: b,
                     radius: radius,
                     intensity: intensity
                 });
@@ -482,6 +496,79 @@ export const renderGame = (
         ctx.restore();
     }
 
+    // --- SOLAR STORM GLOBAL EFFECTS ---
+    if (activeMissionType === MissionType.SOLAR_STORM && missionProgress) {
+        const solarData = (missionProgress as MissionState)?.customData?.solarData;
+        if (solarData) {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+            if (solarData.state === 'WARNING') {
+                // Red/Orange Warning Flash - Softer
+                const alpha = 0.05 + Math.sin(frame * 0.1) * 0.05; // Reduced opacity and speed
+
+                // Vignette - Smoother
+                const grad = ctx.createRadialGradient(canvasWidth / 2, canvasHeight / 2, canvasHeight * 0.4, canvasWidth / 2, canvasHeight / 2, canvasHeight);
+                grad.addColorStop(0, 'rgba(255, 60, 0, 0)');
+                grad.addColorStop(1, `rgba(255, 40, 0, ${alpha * 3})`); // Soft red/orange glow at edges
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            } else if (solarData.state === 'STORM') {
+                // Intensive Storm - Evolution of Warning
+                // Use similar Vignette style but much more intense and filling the screen
+                const intensity = solarData.intensity || 0;
+
+                // Dynamic Pulse: Speed increases with intensity
+                const pulseSpeed = 0.1 + intensity * 0.4;
+                const pulse = Math.sin(frame * pulseSpeed) * (0.1 + intensity * 0.1);
+
+                // Secondary rapid shimmer
+                const shimmer = Math.sin(frame * 0.8) * 0.05 * intensity;
+
+                // Base Overlay - Intense Orange/Red
+                const baseAlpha = 0.3 + intensity * 0.4 + pulse + shimmer;
+
+                // Vignette Style but crushing in
+                // The "eye" of the storm gets smaller as intensity rises
+                const centerRadius = canvasHeight * (0.3 - intensity * 0.15 + pulse * 0.5);
+
+                const grad = ctx.createRadialGradient(canvasWidth / 2, canvasHeight / 2, Math.max(0, centerRadius), canvasWidth / 2, canvasHeight / 2, canvasHeight * 1.2);
+                grad.addColorStop(0, `rgba(255, 120, 0, ${baseAlpha * 0.4})`); // Center is brighter/clearer
+                grad.addColorStop(0.6, `rgba(255, 60, 0, ${baseAlpha})`);
+                grad.addColorStop(1, `rgba(255, 20, 0, ${baseAlpha * 1.2})`); // Darker, blood-red edges
+
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                // Sun Direction Highlight (Instead of lines)
+                // A massive gradient sweep from the sun direction
+                const sunAngle = solarData.sunAngle;
+                const diag = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
+                const cx = canvasWidth / 2;
+                const cy = canvasHeight / 2;
+
+                // Position huge glow source far away
+                const glowX = cx + Math.cos(sunAngle) * diag; // Sun source
+                const glowY = cy + Math.sin(sunAngle) * diag;
+
+                // Pulse the sun glow size
+                const glowSize = diag * (0.5 + intensity * 0.3 + pulse);
+
+                const sunGrad = ctx.createRadialGradient(glowX, glowY, glowSize * 0.2, cx, cy, glowSize * 2.5);
+                sunGrad.addColorStop(0, `rgba(255, 255, 220, ${0.6 + intensity * 0.4 + shimmer})`); // Blinding white/yellow
+                sunGrad.addColorStop(0.4, `rgba(255, 200, 50, ${0.4 + intensity * 0.3})`);
+                sunGrad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillStyle = sunGrad;
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            }
+
+            ctx.restore();
+        }
+    }
+
     // --- Joy Division Topographic Landscape ---
     ctx.save();
     ctx.scale(ZOOM_LEVEL, ZOOM_LEVEL);
@@ -514,7 +601,7 @@ export const renderGame = (
                 draw: () => {
                     ctx.save();
                     ctx.translate(obs.pos.x, obs.pos.y);
-                    drawObstacle(ctx, obs, frame, palette.grid);
+                    drawObstacle(ctx, obs, frame, palette.grid, lightSources);
                     ctx.restore();
                 }
             });
@@ -525,7 +612,138 @@ export const renderGame = (
     replicas.forEach(r => {
         renderQueue.push({
             y: r.pos.y,
-            draw: () => drawPlayerMesh(ctx, r.pos.x, r.pos.y, 22, frame, '#00FFFF')
+            draw: () => {
+                if (r.isSpectral) {
+                    // Determine Class based on Color (set in createAllyReplica)
+                    let type = 'ASSAULT';
+                    if (r.color === '#00FF88') type = 'SNIPER';
+                    else if (r.color === '#FF8800') type = 'SUPPORT';
+
+                    // Animation Params
+                    const t = frame * 0.05;
+                    const bob = Math.sin(t * 2 + (r.id.charCodeAt(0) % 10)) * 2;
+                    const roll = Math.cos(t * 0.5) * 0.1;
+                    const pitch = 0;
+                    const yaw = r.rotation;
+
+                    ctx.save();
+                    ctx.translate(r.pos.x, r.pos.y);
+
+                    const _proj = (x: number, y: number, z: number) => project3D(x, y + bob, z, roll, pitch, yaw, 300);
+
+                    const drawPoly = (verts: any[], col: string, glow: boolean) => {
+                        if (verts.length === 0) return;
+                        ctx.beginPath();
+                        ctx.moveTo(verts[0].x, verts[0].y);
+                        for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+                        ctx.closePath();
+                        ctx.fillStyle = hexToRgba(col, 0.4); // Semitransparent core
+                        ctx.strokeStyle = col;
+                        ctx.lineWidth = glow ? 2 : 1;
+                        if (glow) {
+                            ctx.shadowBlur = 15;
+                            ctx.shadowColor = col;
+                        }
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    };
+
+                    if (type === 'ASSAULT' || type === 'SNIPER') {
+                        // Green Icosahedron (Wireframe)
+                        const s = 18;
+                        const t2 = (1 + Math.sqrt(5)) / 2;
+                        // Icosahedron Vertices
+                        const verts = [
+                            { x: -1, y: t2, z: 0 }, { x: 1, y: t2, z: 0 }, { x: -1, y: -t2, z: 0 }, { x: 1, y: -t2, z: 0 },
+                            { x: 0, y: -1, z: t2 }, { x: 0, y: 1, z: t2 }, { x: 0, y: -1, z: -t2 }, { x: 0, y: 1, z: -t2 },
+                            { x: t2, y: 0, z: -1 }, { x: t2, y: 0, z: 1 }, { x: -t2, y: 0, z: -1 }, { x: -t2, y: 0, z: 1 }
+                        ].map(v => ({ x: v.x * s * 0.6, y: v.y * s * 0.6, z: v.z * s * 0.6 })); // Scale down slightly
+
+                        // Faces (Triangles) or Edges? Wireframe requested.
+                        // Edges logic: Connect vertices.
+                        // Simplified: Draw vertices and connect nearest neighbors?
+                        // Authentic Icosahedron edges:
+                        const edges = [
+                            [0, 1], [0, 5], [0, 7], [0, 10], [0, 11],
+                            [1, 5], [1, 7], [1, 8], [1, 9],
+                            [2, 3], [2, 4], [2, 6], [2, 10], [2, 11],
+                            [3, 4], [3, 6], [3, 8], [3, 9],
+                            [4, 5], [4, 9], [4, 11],
+                            [5, 9], // Fixed connection
+                            [6, 7], [6, 8], [6, 10],
+                            [7, 8],
+                            [8, 9], [10, 11]
+                        ];
+                        // Auto-rotate
+                        const autoRoll = frame * 0.02;
+                        const autoPitch = frame * 0.03;
+
+                        ctx.lineWidth = 1.5;
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#00FF88';
+
+                        edges.forEach(e => {
+                            const v1 = verts[e[0]];
+                            const v2 = verts[e[1]];
+                            // Rotate V1
+                            let y1 = v1.y * Math.cos(autoRoll) - v1.z * Math.sin(autoRoll);
+                            let z1 = v1.y * Math.sin(autoRoll) + v1.z * Math.cos(autoRoll);
+                            let x1 = v1.x * Math.cos(autoPitch) - z1 * Math.sin(autoPitch);
+                            z1 = v1.x * Math.sin(autoPitch) + z1 * Math.cos(autoPitch); // Update z1
+
+                            // Rotate V2
+                            let y2 = v2.y * Math.cos(autoRoll) - v2.z * Math.sin(autoRoll);
+                            let z2 = v2.y * Math.sin(autoRoll) + v2.z * Math.cos(autoRoll);
+                            let x2 = v2.x * Math.cos(autoPitch) - z2 * Math.sin(autoPitch);
+                            z2 = v2.x * Math.sin(autoPitch) + z2 * Math.cos(autoPitch);
+
+                            const p1 = _proj(x1, y1, z1);
+                            const p2 = _proj(x2, y2, z2);
+
+                            ctx.strokeStyle = '#00FF88';
+                            ctx.beginPath();
+                            ctx.moveTo(p1.x, p1.y);
+                            ctx.lineTo(p2.x, p2.y);
+                            ctx.stroke();
+                        });
+
+                        // Center Core
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.shadowBlur = 20;
+                        const core = _proj(0, 0, 0);
+                        ctx.beginPath(); ctx.arc(core.x, core.y, 4, 0, Math.PI * 2); ctx.fill();
+                        ctx.shadowBlur = 0;
+
+                    }
+                    else if (type === 'SUPPORT') {
+                        // Orange Halo (Existing, slightly refined)
+                        const r1 = 16; const r2 = 22; const segs = 8;
+                        const c = '#FF8800';
+
+                        // Draw Ring
+                        ctx.beginPath();
+                        for (let i = 0; i <= segs; i++) {
+                            const a = (i / segs) * Math.PI * 2 + t;
+                            const p = _proj(Math.cos(a) * r2, Math.sin(a) * r2, 0);
+                            if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+                        }
+                        ctx.closePath();
+                        ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = c; ctx.stroke(); ctx.shadowBlur = 0;
+
+                        // Floating bits
+                        for (let i = 0; i < 3; i++) {
+                            const a = (i / 3) * Math.PI * 2 - t * 2;
+                            const p = _proj(Math.cos(a) * 10, Math.sin(a) * 10, Math.sin(t * 4 + i) * 8);
+                            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#FFFFFF'; ctx.fill();
+                        }
+                    }
+
+                    ctx.restore();
+                } else {
+                    drawPlayerMesh(ctx, r.pos.x, r.pos.y, 22, frame, '#00FFFF');
+                }
+            }
         });
     });
 
@@ -534,7 +752,7 @@ export const renderGame = (
         if (!isOnScreen(e.pos.x, e.pos.y, 2000)) return;
 
         // Tall entities need sorting
-        const isVertical = ['PAYLOAD', 'OBELISK', 'STATION', 'CLONE'].includes(e.kind);
+        const isVertical = ['PAYLOAD', 'OBELISK', 'STATION', 'CLONE', 'SOLAR_SHIELD'].includes(e.kind);
 
         if (isVertical) {
             renderQueue.push({
@@ -593,6 +811,8 @@ export const renderGame = (
 
     // --- DRAW PROJECTILES & WEAPON EFFECTS (Always on top) ---
     drawProjectiles(ctx, projectiles, player, frame, viewBounds);
+
+    // --- Supply Drop, Boss & Mission Indicators (Screen Space) ---
 
     // --- Supply Drop, Boss & Mission Indicators (Screen Space) ---
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -737,6 +957,19 @@ export const renderGame = (
                     ctx.beginPath();
                     ctx.arc(p.pos.x, p.pos.y, p.size / 2, 0, Math.PI * 2);
                     ctx.fill();
+                } else if (p.shape === 'POLYGON' && p.polygon && p.polygon.length > 0) {
+                    ctx.save();
+                    ctx.translate(p.pos.x, p.pos.y);
+                    ctx.rotate(p.rotation || 0);
+                    ctx.beginPath();
+                    ctx.moveTo(p.polygon[0].x * p.size, p.polygon[0].y * p.size);
+                    for (let i = 1; i < p.polygon.length; i++) {
+                        ctx.lineTo(p.polygon[i].x * p.size, p.polygon[i].y * p.size);
+                    }
+                    ctx.closePath();
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.restore();
                 } else {
                     ctx.fillRect(p.pos.x - p.size / 2, p.pos.y - p.size / 2, p.size, p.size);
                 }

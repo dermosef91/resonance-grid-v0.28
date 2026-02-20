@@ -101,7 +101,7 @@ export interface Obstacle extends Entity {
 
 // New Interface for Mission Entities
 export interface MissionEntity extends Entity {
-  kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON';
+  kind: 'ZONE' | 'PAYLOAD' | 'OBELISK' | 'STATION' | 'CLONE' | 'SYNC_GOAL' | 'FILTER_WAVE' | 'EVENT_HORIZON' | 'SOLAR_SHIELD' | 'ALLY';
   health: number;
   maxHealth: number;
   active: boolean; // For Obelisks/Zones
@@ -113,6 +113,8 @@ export interface MissionEntity extends Entity {
     holeWidth: number;
     width: number; // Length of the wall (visually infinite)
   };
+  solid?: boolean; // If true, blocks player movement
+  customData?: any; // Generic data for various mission entity needs
 }
 
 export interface PlayerStats {
@@ -163,6 +165,10 @@ export interface Replica extends Entity {
   weapons: Weapon[];
   stats: PlayerStats;
   lifeTime: number;
+  isAlly?: boolean;
+  isSpectral?: boolean;
+  formationOffset?: Vector2;
+  departing?: boolean;
 }
 
 export interface Enemy extends Entity {
@@ -181,12 +187,15 @@ export interface Enemy extends Entity {
   rotVelocity?: number; // Physics tumbling
   opacity?: number; // For stealth enemies like Ghost
   stunTimer: number; // Frames remaining for stun
+  bleedTimer?: number; // Frames remaining for bleed
+  bleedDamage?: number; // Damage per tick for bleed
   slowTimer?: number; // Frames remaining for slow (Augment: Entropy)
   immuneTimers: Record<string, number>; // WeaponID -> Frames remaining of immunity
   gravityPull?: number; // Strength of pull on player
   voidSiphonTimer?: number; // Added for Void Siphon augment
   // Special drop flag for Kaleidoscope Evolution
   deathColor?: 'RED' | 'GREEN' | 'BLUE';
+  skipDrop?: boolean; // If true, no XP/Items on death
 
   // Custom data for arbitrary behaviors
   customData?: any;
@@ -348,7 +357,8 @@ export interface VisualParticle extends Entity {
   decay: number;
   rotation?: number;
   rotationSpeed?: number;
-  shape?: 'SQUARE' | 'LINE' | 'CIRCLE';
+  shape?: 'SQUARE' | 'LINE' | 'CIRCLE' | 'POLYGON'; // Added POLYGON shape
+  polygon?: Vector2[]; // Custom vertices relative to center
 
   // New Light Cast Properties
   lightColor?: string;
@@ -430,6 +440,13 @@ export interface MetaState {
   unlockedItems: string[]; // List of Weapon/Artifact IDs
   permanentUpgrades: Record<string, number>; // UpgradeID -> Level
   maxWaveCompleted: number; // Max wave index completed (0 = none, 5 = Wave 5 won)
+  personalBests?: {
+    maxKills: number;
+    maxDamage: number;
+    maxChips: number;
+    fastestRun?: number;
+  };
+  seenItems?: string[];
 }
 
 // --- MISSION SYSTEM TYPES ---
@@ -446,7 +463,9 @@ export enum MissionType {
   WEAPON_OVERRIDE = 'WEAPON_OVERRIDE',
   ENTANGLEMENT = 'ENTANGLEMENT',
   THE_GREAT_FILTER = 'THE_GREAT_FILTER',
-  EVENT_HORIZON = 'EVENT_HORIZON'
+  EVENT_HORIZON = 'EVENT_HORIZON',
+  SOLAR_STORM = 'SOLAR_STORM',
+  RESCUE = 'RESCUE'
 }
 
 export interface MissionState {
@@ -467,6 +486,17 @@ export interface MissionState {
     cloneOffset?: Vector2; // For Entanglement
     cloneAlive?: boolean; // For Entanglement
     filterSafeZoneId?: string; // For Great Filter
+    solarData?: {
+      state: 'CALM' | 'WARNING' | 'STORM';
+      timer: number;
+      sunAngle: number;
+      intensity: number;
+    };
+    allyGuards?: Record<string, string[]>; // RESCUE: AllyID -> GuardIDs
+    needsSpawn?: boolean; // RESCUE: Flag to trigger initial spawn
+    guardsSpawned?: boolean; // RESCUE: Flag to indicate guards are active
+    spawnTime?: number; // RESCUE: Timestamp of spawn to prevent instant-clear
+    phase2Started?: boolean; // RESCUE: Flag to trigger elite wave
   };
 }
 
@@ -482,3 +512,22 @@ export interface WaveConfig {
 export type GameStatus = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER' | 'LEVEL_UP' | 'VICTORY' | 'COMPENDIUM' | 'MISSION_COMPLETE' | 'AUGMENT_SELECT';
 
 export type TutorialStep = 'NONE' | 'MOVE' | 'COMBAT' | 'COLLECT';
+
+export interface GameOverUnlockedItem {
+  id: string;
+  name: string;
+  description: string;
+  type: 'WEAPON' | 'ARTIFACT' | 'UPGRADE';
+  rarity?: string;
+}
+
+export interface GameOverInfo {
+  score: number;
+  level: number;
+  wave: number;
+  kills: number;
+  duration: number; // Seconds
+  chipsEarned: number;
+  newUnlocks: GameOverUnlockedItem[];
+  newAvailable: GameOverUnlockedItem[];
+}

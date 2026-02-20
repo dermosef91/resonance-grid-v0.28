@@ -1,5 +1,5 @@
 
-import { Player, Enemy, Projectile, VisualParticle, TextParticle, EntityType, EnemyType, Obstacle } from '../../types';
+import { Player, Enemy, Projectile, VisualParticle, TextParticle, EntityType, EnemyType, Obstacle, MissionEntity } from '../../types';
 import { checkCollision, checkBeamCollision, SpatialHash, resolveStaticCollision } from '../PhysicsSystem';
 import { handleChainLightning, createTextParticle, createShatterParticles } from '../gameLogic';
 import { COLORS } from '../../constants';
@@ -17,7 +17,8 @@ export const resolveCollisions = (
     projectiles: Projectile[],
     grid: SpatialHash,
     enemies: Enemy[],
-    obstacles: Obstacle[] = []
+    obstacles: Obstacle[] = [],
+    missionEntities: MissionEntity[] = [] // Added MissionEntities
 ): CollisionResult => {
     const result: CollisionResult = {
         playerDamageTaken: 0,
@@ -32,6 +33,16 @@ export const resolveCollisions = (
         }
     }
 
+    // --- PLAYER VS SOLID MISSION ENTITIES ---
+    for (const entity of missionEntities) {
+        if (entity.solid) {
+            // Treat as static circular obstacle for now
+            if (resolveStaticCollision(player, entity)) {
+                // Collision handled (position correction)
+            }
+        }
+    }
+
     projectiles.forEach(proj => {
         if (proj.markedForDeletion) return;
 
@@ -40,6 +51,9 @@ export const resolveCollisions = (
         if (!proj.beamData && !proj.skyFallData && !proj.paradoxData && !proj.voidWakeData) {
             for (const obs of obstacles) {
                 if (checkCollision(proj, obs)) {
+                    // Don't destroy barrier projectiles on obstacles (self-collision or otherwise)
+                    if (proj.customData?.isBarrier) continue;
+
                     proj.markedForDeletion = true;
                     // Spark effect on wall hit
                     result.newParticles.push(...createShatterParticles(proj.pos, '#00FFFF', 3, 5));
@@ -232,7 +246,7 @@ export const resolveCollisions = (
                         // Chroma Stasis Freeze Chance
                         if (proj.customData?.augment === 'CHROMA_STASIS' && Math.random() < 0.2) {
                             enemy.stunTimer = 60; // 1s freeze
-                            result.newParticles.push(createTextParticle(enemy.pos, "FROZE", '#00FFFF'));
+                            // result.newParticles.push(createTextParticle(enemy.pos, "FROZE", '#00FFFF'));
                         }
 
                         // Determine Max Generations
@@ -316,7 +330,7 @@ export const resolveCollisions = (
                     // PARADOX EVOLUTION: GRANDFATHER PARADOX (Erase on Rewind Kill)
                     if (proj.paradoxData?.isEvolution && proj.paradoxData.state === 'REWIND' && enemy.health <= 0) {
                         (enemy as any).erasedFromExistence = true;
-                        result.newParticles.push(createTextParticle(enemy.pos, "ERASED", '#FFFFFF'));
+                        // result.newParticles.push(createTextParticle(enemy.pos, "ERASED", '#FFFFFF'));
                     }
 
                     if (!proj.skyFallData?.isPool && !proj.beamData) {
@@ -333,20 +347,21 @@ export const resolveCollisions = (
 
                     if (proj.stunDuration) {
                         const prevStun = enemy.stunTimer; enemy.stunTimer = Math.max(enemy.stunTimer, proj.stunDuration);
-                        if (prevStun <= 0) result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - 10 }, "STUN", '#00FFFF'));
+                        // if (prevStun <= 0) result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - 10 }, "STUN", '#00FFFF'));
                     }
 
-                    // AUGMENT: RESONANT_FEEDBACK
-                    if (proj.customData?.augment === 'RESONANT_FEEDBACK') {
-                        result.newProjectiles.push(getProjectile({
-                            id: Math.random().toString(), type: EntityType.PROJECTILE, pos: { ...enemy.pos }, velocity: { x: 0, y: 0 },
-                            radius: 15, color: '#FF4500', markedForDeletion: false, damage: finalDamage * 0.5, duration: 5, pierce: 999, knockback: 0, isEnemy: false, sourceWeaponId: 'kora_spark'
-                        }));
+                    // AUGMENT: DISSONANCE_SHREDDER (Bleed)
+                    if (proj.customData?.augment === 'DISSONANCE_SHREDDER') {
+                        // Apply Bleed: 50% of hit damage over 1s (60 frames)
+                        // effective damage per tick (handled in EnemySystem)
+                        enemy.bleedTimer = 60;
+                        enemy.bleedDamage = finalDamage * 0.5;
                     }
 
                     if (proj.chainData) {
                         proj.markedForDeletion = true;
-                        if (proj.chainData.isStunning) { enemy.stunTimer = 60; result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - 10 }, "STUN", '#00FFFF')); }
+                        // if (proj.chainData.isStunning) { enemy.stunTimer = 60; result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - 10 }, "STUN", '#00FFFF')); }
+                        if (proj.chainData.isStunning) { enemy.stunTimer = 60; }
                         const chainProjectiles = handleChainLightning(proj, enemy, enemies);
                         result.newProjectiles.push(...chainProjectiles);
                     } else if (proj.pierce > 0) {

@@ -130,6 +130,20 @@ export const useUpgradeLogic = (
     }, [metaState, setLevelUpOptions]);
 
     const selectUpgrade = useCallback((opt: UpgradeOption) => {
+        // Mark all displayed options as seen
+        const displayedIds = gameState.levelUpOptions.map((o: UpgradeOption) => o.weaponId || o.id);
+        const currentSeen = metaState.seenItems || [];
+        const newSeen = displayedIds.filter((id: string) => !currentSeen.includes(id));
+
+        if (newSeen.length > 0) {
+            const newState = {
+                ...metaState,
+                seenItems: [...currentSeen, ...newSeen]
+            };
+            setMetaState(newState);
+            saveMetaState(newState);
+        }
+
         opt.apply(playerRef.current);
         if (opt.type !== 'AUGMENT_TRIGGER') {
             if (pendingRewardsRef.current > 0) {
@@ -143,7 +157,7 @@ export const useUpgradeLogic = (
                 setIsMissionReward(false);
             }
         }
-    }, [generateUpgrades, setStatus, setIsMissionReward]);
+    }, [generateUpgrades, setStatus, setIsMissionReward, metaState, setMetaState, gameState.levelUpOptions]);
 
     const applyAugment = useCallback((augmentId: string) => {
         if (!augmentTarget) return;
@@ -155,7 +169,7 @@ export const useUpgradeLogic = (
             const progression = WEAPON_UPGRADE_TABLE[weapon.id]?.[5];
             if (progression) progression.apply(weapon);
 
-            particlesRef.current.push(createTextParticle(playerRef.current.pos, "SYSTEM MODULATED", '#00FFFF', 90));
+            // particlesRef.current.push(createTextParticle(playerRef.current.pos, "SYSTEM MODULATED", '#00FFFF', 90));
             screenShakeRef.current += 15;
             setInventory([...playerRef.current.weapons]);
         }

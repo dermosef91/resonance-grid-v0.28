@@ -50,7 +50,7 @@ export const ALL_ENEMIES_DB = [
         desc: "Stops to shoot projectiles at the player.", waves: "3", included: true
     },
     {
-        type: EnemyType.ELITE_DRONE, name: "Elite Drone", hp: 60, speed: 3.3, damage: 40, xp: 5, radius: 18, color: '#ff9900',
+        type: EnemyType.ELITE_DRONE, name: "Elite Drone", hp: 60, speed: 3.3, damage: 40, xp: 5, radius: 18, color: '#FF5500',
         desc: "Upgraded drone with higher stats.", waves: "3, 10", included: true
     },
     {

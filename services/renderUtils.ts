@@ -17,7 +17,7 @@ export const hexToRgbStruct = (hex: string) => {
     };
 };
 
-export const parseColorToRgb = (color: string): {r: number, g: number, b: number} | null => {
+export const parseColorToRgb = (color: string): { r: number, g: number, b: number } | null => {
     if (!color) return null;
     if (color.startsWith('#')) {
         return hexToRgbStruct(color);
@@ -38,11 +38,11 @@ export const rgbToHex = (r: number, g: number, b: number) => {
 export const lerpColor = (c1: string, c2: string, t: number): string => {
     const color1 = hexToRgbStruct(c1);
     const color2 = hexToRgbStruct(c2);
-    
+
     const r = color1.r + (color2.r - color1.r) * t;
     const g = color1.g + (color2.g - color1.g) * t;
     const b = color1.b + (color2.b - color1.b) * t;
-    
+
     return rgbToHex(r, g, b);
 };
 
@@ -61,7 +61,7 @@ export const getDropStyle = (content?: string) => {
         case 'FULL_HEALTH': return { hex: '#00FF00', rgba: 'rgba(0, 255, 0,' };
         case 'TEMPORAL_BOOST': return { hex: '#00FF00', rgba: 'rgba(0, 255, 0,' };
         case 'EXTRA_LIFE': return { hex: '#FFFFFF', rgba: 'rgba(255, 255, 255,' };
-        case 'LEVEL_UP': 
+        case 'LEVEL_UP':
         default: return { hex: '#00FFFF', rgba: 'rgba(0, 255, 255,' };
     }
 };
@@ -71,34 +71,34 @@ export const getDropStyle = (content?: string) => {
  * Supports rotation on X, Y, and Z axes.
  */
 export const project3D = (
-    x: number, 
-    y: number, 
-    z: number, 
-    rx: number = 0, 
-    ry: number = 0, 
+    x: number,
+    y: number,
+    z: number,
+    rx: number = 0,
+    ry: number = 0,
     rz: number = 0,
     focalLength: number = 300
 ): { x: number, y: number, scale: number, depth: number } => {
     // Rotate X
     let y1 = y * Math.cos(rx) - z * Math.sin(rx);
     let z1 = y * Math.sin(rx) + z * Math.cos(rx);
-    
+
     // Rotate Y
     let x2 = x * Math.cos(ry) - z1 * Math.sin(ry);
     let z2 = x * Math.sin(ry) + z1 * Math.cos(ry);
-    
+
     // Rotate Z
     let x3 = x2 * Math.cos(rz) - y1 * Math.sin(rz);
     let y3 = x2 * Math.sin(rz) + y1 * Math.cos(rz);
-    
+
     // Project
     // Avoid division by zero or negative depth issues
-    const safeZ = Math.max(z2, focalLength * -0.9); 
+    const safeZ = Math.max(z2, focalLength * -0.9);
     const scale = focalLength / (focalLength - safeZ);
-    
-    return { 
-        x: x3 * scale, 
-        y: y3 * scale, 
+
+    return {
+        x: x3 * scale,
+        y: y3 * scale,
         scale,
         depth: z2 // Useful for Z-sorting
     };
@@ -107,42 +107,42 @@ export const project3D = (
 /**
  * Simple perspective projection without rotation inputs (for when rotation is calculated manually)
  */
-export const projectSimple = (v: {x:number, y:number, z:number}, fl: number = 300) => {
+export const projectSimple = (v: { x: number, y: number, z: number }, fl: number = 300) => {
     const p = 1 / (1 - v.z / fl);
     return { x: v.x * p, y: v.y * p };
 };
 
 export const drawLightningBolt = (
-    ctx: CanvasRenderingContext2D, 
-    p1: {x:number, y:number}, 
-    p2: {x:number, y:number}, 
-    color: string, 
+    ctx: CanvasRenderingContext2D,
+    p1: { x: number, y: number },
+    p2: { x: number, y: number },
+    color: string,
     width: number = 2,
     displacement: number = 20
 ) => {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
+    const dist = Math.sqrt(dx * dx + dy * dy);
     const steps = Math.max(2, Math.floor(dist / 40));
-    
+
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
-    
-    for(let i=1; i<steps; i++) {
+
+    for (let i = 1; i < steps; i++) {
         const t = i / steps;
         // Perpendicular jitter
         const perpX = -dy / dist;
         const perpY = dx / dist;
         const jitter = (Math.random() - 0.5) * displacement;
-        
+
         ctx.lineTo(
-            p1.x + dx*t + perpX * jitter, 
-            p1.y + dy*t + perpY * jitter
+            p1.x + dx * t + perpX * jitter,
+            p1.y + dy * t + perpY * jitter
         );
     }
-    
+
     ctx.lineTo(p2.x, p2.y);
-    
+
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.shadowColor = color;

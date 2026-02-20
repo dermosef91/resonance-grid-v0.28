@@ -1,119 +1,173 @@
-
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Resonance Grid</title>
-    
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YJVTZBS8ZT"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
 
-      gtag('config', 'G-YJVTZBS8ZT');
-    </script>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Resonance Grid</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- Fonts: Google Sans Code fallback to Roboto Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;500&display=swap" rel="stylesheet">
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YJVTZBS8ZT"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['"Google Sans Code"', '"Roboto Mono"', 'monospace'],
-              mono: ['"Google Sans Code"', '"Roboto Mono"', 'monospace'],
-            },
-            fontWeight: {
-              light: '300',
-              normal: '500', /* Remap normal to Medium 500 per request */
-              medium: '500',
-              bold: '500',   /* Remap bold to Medium 500 to enforce strict weight usage */
-            }
+    gtag('config', 'G-YJVTZBS8ZT');
+  </script>
+
+  <!-- Fonts: Google Sans Code fallback to Roboto Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Google Sans Code"', '"Roboto Mono"', 'monospace'],
+            mono: ['"Google Sans Code"', '"Roboto Mono"', 'monospace'],
+          },
+          fontWeight: {
+            light: '300',
+            normal: '500', /* Remap normal to Medium 500 per request */
+            medium: '500',
+            bold: '500',   /* Remap bold to Medium 500 to enforce strict weight usage */
           }
         }
       }
-    </script>
-    <style>
-      body {
-        background-color: #050505;
-        color: #f0f0f0;
-        font-family: "Google Sans Code", "Roboto Mono", monospace;
-        font-weight: 500;
-        overscroll-behavior: none;
-        /* Handle safe areas for notches */
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-      }
-      canvas {
-        image-rendering: pixelated;
-      }
-      /* Custom Scrollbar for Webkit */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1a1a1a;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #ff6600;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #cc5200;
+    }
+  </script>
+  <style>
+    body {
+      background-color: #050505;
+      color: #f0f0f0;
+      font-family: "Google Sans Code", "Roboto Mono", monospace;
+      font-weight: 500;
+      overscroll-behavior: none;
+      /* Handle safe areas for notches */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    canvas {
+      image-rendering: pixelated;
+    }
+
+    /* Custom Scrollbar for Webkit */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #ff6600;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #cc5200;
+    }
+
+    /* Legendary Holographic Animation */
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-150%) rotate(45deg);
       }
 
-      /* Legendary Holographic Animation */
-      @keyframes shimmer {
-        0% { transform: translateX(-150%) rotate(45deg); }
-        100% { transform: translateX(150%) rotate(45deg); }
+      100% {
+        transform: translateX(150%) rotate(45deg);
+      }
+    }
+
+    @keyframes holo-glow {
+
+      0%,
+      100% {
+        border-color: #ffffff;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
       }
 
-      @keyframes holo-glow {
-        0%, 100% { border-color: #ffffff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.2); }
-        50% { border-color: #ffaa00; box-shadow: 0 0 20px rgba(255, 170, 0, 0.4); }
+      50% {
+        border-color: #ffaa00;
+        box-shadow: 0 0 20px rgba(255, 170, 0, 0.4);
       }
+    }
 
-      .legendary-hologram {
-        position: relative;
-        overflow: hidden;
-        animation: holo-glow 3s infinite ease-in-out;
-        z-index: 1;
-      }
+    .legendary-hologram {
+      position: relative;
+      overflow: hidden;
+      animation: holo-glow 3s infinite ease-in-out;
+      z-index: 1;
+    }
 
-      .legendary-hologram::after {
-        content: "";
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: linear-gradient(
-          to right,
+    .legendary-hologram::after {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(to right,
           transparent 0%,
           rgba(255, 255, 255, 0) 30%,
           rgba(255, 255, 255, 0.4) 50%,
           rgba(255, 255, 255, 0) 70%,
-          transparent 100%
-        );
-        transform: rotate(45deg);
-        animation: shimmer 4s infinite linear;
-        pointer-events: none;
-        z-index: 2;
+          transparent 100%);
+      transform: rotate(45deg);
+      animation: shimmer 4s infinite linear;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .legendary-hologram * {
+      z-index: 3;
+    }
+
+    .no-cursor,
+    .no-cursor * {
+      cursor: none !important;
+    }
+
+    @keyframes purchase-pulse {
+      0% {
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 0 rgba(0, 255, 0, 0));
+        border-color: rgba(74, 222, 128, 0.5);
       }
 
-      .legendary-hologram * {
-        z-index: 3;
+      20% {
+        transform: scale(1.05);
+        filter: brightness(1.5) drop-shadow(0 0 20px rgba(0, 255, 0, 0.6));
+        border-color: rgba(0, 255, 0, 1);
       }
-    </style>
+
+      40% {
+        transform: scale(1.02);
+        filter: brightness(1.2) drop-shadow(0 0 10px rgba(0, 255, 0, 0.4));
+        border-color: rgba(74, 222, 128, 0.8);
+      }
+
+      100% {
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 0 rgba(0, 255, 0, 0));
+        border-color: rgba(74, 222, 128, 1);
+      }
+    }
+
+    .animate-purchase-pulse {
+      animation: purchase-pulse 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -129,8 +183,10 @@
 }
 </script>
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-  </body>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+</body>
+
 </html>

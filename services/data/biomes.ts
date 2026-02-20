@@ -85,21 +85,21 @@ export const BIOMES: Record<string, ColorPalette> = {
 
 export const getWavePalette = (waveId: number): ColorPalette => {
     // Boss Waves
-    if ([6, 12, 15, 20].includes(waveId)) { 
+    if ([6, 12, 15, 20].includes(waveId)) {
         if (waveId === 15) return BIOMES.VOID; // Hive Mind Theme
         if (waveId === 20) return BIOMES.GOLD; // Aido Hwedo Theme
         return BIOMES.BOSS;
     }
-    
+
     // Tech Waves (Fast/Robots)
     if ([5, 9, 10, 11].includes(waveId)) return BIOMES.TECH;
-    
+
     // Void Waves (Swarms/Ghosts/Magic)
     if ([7, 8, 13, 14, 18, 19].includes(waveId)) return BIOMES.VOID;
-    
+
     // Toxic/Chaos Waves
     if ([16, 17].includes(waveId)) return BIOMES.TOXIC;
-    
+
     // Default (1-4) and unhandled
     return BIOMES.DEFAULT;
 };
