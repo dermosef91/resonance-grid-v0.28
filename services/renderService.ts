@@ -151,12 +151,16 @@ export const renderGame = (
 
                 const rgb = parseColorToRgb(vp.lightColor);
                 if (rgb) {
+                    let intensity = 1.0;
+                    if (vp.shape === 'POLYGON') {
+                        intensity = 5.0; // Make polygon shatter glow much stronger
+                    }
                     lightSources.push({
                         x: vp.pos.x,
                         y: vp.pos.y,
                         r: rgb.r, g: rgb.g, b: rgb.b,
                         radius: vp.lightRadius * (vp.life / vp.maxLife),
-                        intensity: 1.0
+                        intensity: intensity
                     });
                 }
             }
@@ -601,7 +605,7 @@ export const renderGame = (
                 draw: () => {
                     ctx.save();
                     ctx.translate(obs.pos.x, obs.pos.y);
-                    drawObstacle(ctx, obs, frame, palette.grid, lightSources);
+                    drawObstacle(ctx, obs, frame, palette.grid);
                     ctx.restore();
                 }
             });

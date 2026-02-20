@@ -87,7 +87,11 @@ export const drawMissionEntity = (
             { x: bW, y: 0, z: bW }, { x: -bW, y: 0, z: bW },
             { x: 0, y: bH, z: 0 } // Tip
         ];
-        const pBase = baseVerts.map(v => project3D(v.x, v.y, v.z, 0, 0, 0, 300));
+
+        // Use isometric projection to match the scale(1, 0.5) ground circle perspective
+        const isoProject = (x: number, y: number, z: number) => ({ x, y: y + z * 0.5 });
+
+        const pBase = baseVerts.map(v => isoProject(v.x, v.y, v.z));
 
         ctx.fillStyle = '#111111';
         ctx.strokeStyle = mainColor;
@@ -125,7 +129,7 @@ export const drawMissionEntity = (
             const dx = v.x; const dz = v.z;
             const rx = dx * Math.cos(spin) - dz * Math.sin(spin);
             const rz = dx * Math.sin(spin) + dz * Math.cos(spin);
-            return project3D(rx, v.y, rz, 0, 0, 0, 300);
+            return isoProject(rx, v.y, rz);
         });
 
         ctx.fillStyle = isActive ? '#FFFFFF' : '#333333';
@@ -166,7 +170,7 @@ export const drawMissionEntity = (
             // Ground point 3D coord (y=0 is ground)
             const gx = Math.cos(angle) * e.radius;
             const gz = Math.sin(angle) * e.radius;
-            const pGround = project3D(gx, 0, gz, 0, 0, 0, 300);
+            const pGround = isoProject(gx, 0, gz);
 
             ctx.beginPath();
             ctx.moveTo(beamSource.x, beamSource.y);

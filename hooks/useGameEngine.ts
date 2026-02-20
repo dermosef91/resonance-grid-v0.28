@@ -816,7 +816,7 @@ export const useGameEngine = (
         const pickupResult = updatePickups(pickupsRef.current, player);
         pickupResult.collected.forEach(p => {
             if (p.kind === 'KALEIDOSCOPE') {
-                player.kaleidoscopeTimer = 600; particlesRef.current.push(createTextParticle(player.pos, "PRISM ACTIVE (10s)", '#FF00FF', 90)); screenShakeRef.current += 10;
+                player.kaleidoscopeTimer = 600; screenShakeRef.current += 10;
             } else if (p.kind === 'XP') {
                 player.xp += p.value * player.stats.xpMult; player.xpPulseTimer = 8; scoreRef.current += p.value;
                 if (player.xp >= player.nextLevelXp && !levelUpProcessingRef.current) { levelUpProcessingRef.current = true; levelUpTimerRef.current = 0; }
@@ -833,7 +833,7 @@ export const useGameEngine = (
                 trackEvent(runIdRef.current, 'LOOT_PICKUP', player, metaState, waveIndexRef.current + 1, sessionCurrencyRef.current, Math.floor(frameRef.current / 60), { lootType: p.supplyContent || 'LEVEL_UP' });
                 const content = p.supplyContent || 'LEVEL_UP';
                 if (content === 'CURRENCY_50') { sessionCurrencyRef.current += 50; particlesRef.current.push(createTextParticle(player.pos, `+50 ◆`, '#FFD700', 60)); }
-                else if (content === 'FULL_HEALTH') { player.health = player.maxHealth; player.healthPulseTimer = 15; particlesRef.current.push(createTextParticle(player.pos, `MAX HEALTH`, '#00FF00', 60)); }
+                else if (content === 'FULL_HEALTH') { player.health = player.maxHealth; player.healthPulseTimer = 15; }
                 else if (content === 'LEVEL_UP') { player.level++; player.xp = 0; player.nextLevelXp = Math.floor(player.nextLevelXp * BALANCE.XP_GROWTH_RATE); setStatus('LEVEL_UP'); generateUpgrades(); particlesRef.current.push(createTextParticle(player.pos, "SYSTEM UPGRADE", '#FFFFFF', 60)); }
                 else if (content === 'EXTRA_LIFE') { player.extraLives += 1; particlesRef.current.push(createTextParticle(player.pos, "EXTRA LIFE", '#FFFFFF', 90)); }
                 else { particlesRef.current.push(createTextParticle(player.pos, "ANCESTRAL RESONANCE (30s)", '#ff6600', 90)); const tempWeapon = { ...BASE_WEAPONS.ancestral_resonance, expiresAt: frameRef.current + (30 * 60) }; player.weapons.push(tempWeapon); }

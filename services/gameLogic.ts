@@ -397,14 +397,16 @@ export const createPolygonShatterParticles = (enemy: Enemy): VisualParticle[] =>
             radius: 0, // Not used for collision
             color: color,
             markedForDeletion: false,
-            life: 40 + Math.random() * 20,
-            maxLife: 60,
+            life: 20 + Math.random() * 10,
+            maxLife: 30,
             size: 1, // acts as scale multiplier if needed
             decay: 0.94,
             shape: 'POLYGON',
             polygon: poly,
             rotation: 0,
-            rotationSpeed: (Math.random() - 0.5) * 0.4
+            rotationSpeed: (Math.random() - 0.5) * 0.4,
+            lightColor: color,
+            lightRadius: Math.max(200, r * 4)
         }));
     }
 

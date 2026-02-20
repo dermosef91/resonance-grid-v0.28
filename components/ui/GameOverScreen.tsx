@@ -171,25 +171,25 @@ export const GameOverScreen: React.FC<{
     }
 
     return (
-        <OverlayContainer zIndex={50} className="bg-red-900/20 overflow-y-auto">
-            <div className="bg-black border border-orange-500 p-8 max-w-2xl w-full text-center my-8 relative">
-                <h2 className="text-5xl font-bold text-white mb-8 animate-in zoom-in duration-500">RUN COMPLETE</h2>
+        <OverlayContainer zIndex={50} className="bg-red-900/20 overflow-y-auto p-0 sm:p-4">
+            <div className="bg-black border-y sm:border border-orange-500 p-4 sm:p-8 [@media(max-height:600px)]:p-4 max-w-2xl w-full text-center relative max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto flex flex-col justify-center my-auto shadow-2xl">
+                <h2 className="text-3xl sm:text-5xl [@media(max-height:600px)]:text-3xl font-bold text-white mb-4 sm:mb-8 [@media(max-height:600px)]:mb-4 animate-in zoom-in duration-500 pt-4 sm:pt-0">RUN COMPLETE</h2>
 
-                <div className="grid grid-cols-2 gap-4 mb-8 border-t border-b border-gray-800 py-6">
+                <div className="grid grid-cols-2 gap-4 mb-4 sm:mb-8 [@media(max-height:600px)]:mb-4 border-y border-gray-800 py-3 sm:py-6 [@media(max-height:600px)]:py-3 shrink-0">
                     <div className="flex flex-col items-center justify-center border-r border-gray-800">
-                        <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Wave Reached</div>
-                        <div className="text-4xl font-bold text-white">{wave}</div>
+                        <div className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-1 sm:mb-2">Wave Reached</div>
+                        <div className="text-2xl sm:text-4xl [@media(max-height:600px)]:text-2xl font-bold text-white">{wave}</div>
                     </div>
                     <div className="flex flex-col items-center justify-center">
-                        <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Chips</div>
+                        <div className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-1 sm:mb-2">Chips</div>
                         <CurrencyDisplay amount={displayChips} size="lg" />
                     </div>
                 </div>
 
                 {(visibleUnlocks.length > 0) && (
-                    <div className="mb-10 w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <h3 className="text-orange-500 font-bold uppercase tracking-[0.2em] text-sm mb-6 text-center animate-pulse">Unlocked Upgrades</h3>
-                        <div className="flex flex-wrap justify-center gap-4">
+                    <div className="mb-6 sm:mb-10 [@media(max-height:600px)]:mb-4 w-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <h3 className="text-orange-500 font-bold uppercase tracking-[0.2em] text-xs sm:text-sm mb-3 sm:mb-6 [@media(max-height:600px)]:mb-2 text-center animate-pulse sticky top-0 bg-black z-20 pb-2">Unlocked Upgrades</h3>
+                        <div className="flex flex-wrap justify-center gap-2 sm:gap-4 pb-4">
                             {visibleUnlocks.map((item, index) => {
                                 if (!item) return null;
                                 const isNew = newUnlocks.some(u => u && u.id === item.id);
@@ -199,7 +199,7 @@ export const GameOverScreen: React.FC<{
                                         key={item.id}
                                         onClick={openStore}
                                         className={`
-                                            relative flex flex-col items-center p-4 min-w-[140px] cursor-pointer hover:bg-gray-800 transition-colors
+                                            relative flex flex-col items-center p-2 sm:p-4 [@media(max-height:600px)]:p-2 min-w-[100px] sm:min-w-[140px] cursor-pointer hover:bg-gray-800 transition-colors
                                             bg-gray-900 border-2 
                                             ${isNew ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.4)] scale-110 z-10' : 'border-yellow-700'} 
                                             animate-in zoom-in-0 fade-in slide-in-from-bottom-12 duration-500 fill-mode-backwards
@@ -208,23 +208,22 @@ export const GameOverScreen: React.FC<{
                                     >
                                         {/* New Badge */}
                                         {isNew && (
-                                            <div className="absolute top-2 right-2 text-[10px] font-mono text-purple-400 border border-purple-900/50 px-1.5 py-0.5 bg-black/50 tracking-widest z-20">
+                                            <div className="absolute top-1 sm:top-2 right-1 sm:right-2 text-[8px] sm:text-[10px] font-mono text-purple-400 border border-purple-900/50 px-1 py-0.5 bg-black/50 tracking-widest z-20">
                                                 NEW
                                             </div>
                                         )}
 
-                                        <div className="mb-3 transform hover:scale-125 transition-transform duration-300">
-                                            <IconFrame id={item.id} color={isNew ? "#d8b4fe" : "#fbbf24"} size="lg" className={isNew ? "animate-pulse" : ""} />
+                                        <div className="mb-1 sm:mb-3 transform hover:scale-125 transition-transform duration-300">
+                                            <IconFrame id={item.id} color={isNew ? "#d8b4fe" : "#fbbf24"} size="lg" className={`${isNew ? "animate-pulse" : ""} w-10 h-10 sm:w-16 sm:h-16 [@media(max-height:600px)]:w-10 [@media(max-height:600px)]:h-10`} />
                                         </div>
 
-                                        <div className="text-center">
-                                            <div className={`text-sm font-bold uppercase mb-1 ${isNew ? 'text-purple-300' : 'text-yellow-500'}`}>
+                                        <div className="text-center w-full px-1">
+                                            <div className={`text-[10px] sm:text-sm font-bold uppercase leading-tight mb-0.5 sm:mb-1 truncate ${isNew ? 'text-purple-300' : 'text-yellow-500'}`}>
                                                 {item.name}
                                             </div>
-                                            <div className="text-[10px] text-gray-500 font-mono uppercase">
+                                            <div className="text-[8px] sm:text-[10px] text-gray-500 font-mono uppercase">
                                                 {isNew ? 'UNLOCKED' : 'IN SHOP'}
                                             </div>
-                                            {/* Item Preview Tooltip could go here */}
                                         </div>
                                     </div>
                                 );
@@ -233,10 +232,10 @@ export const GameOverScreen: React.FC<{
                     </div>
                 )}
 
-                <div className={`flex flex-col gap-3 transition-opacity duration-1000 ${showButtons ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className={`flex flex-col gap-2 sm:gap-3 shrink-0 transition-opacity duration-1000 ${showButtons ? 'opacity-100' : 'opacity-0 pointer-events-none'} pb-4 sm:pb-0`}>
 
                     {canWatchAd && (
-                        <div className="mb-4">
+                        <div className="mb-2 sm:mb-4">
                             <NeonButton
                                 onClick={handleAdClick}
                                 variant="secondary"
@@ -251,7 +250,7 @@ export const GameOverScreen: React.FC<{
 
                     {canShop && (
                         <>
-                            <div className="mb-2 text-xs font-mono text-gray-400 flex flex-wrap justify-center items-center gap-1.5 uppercase tracking-wide">
+                            <div className="mb-1 sm:mb-2 text-[10px] sm:text-xs font-mono text-gray-400 flex flex-wrap justify-center items-center gap-1 sm:gap-1.5 uppercase tracking-wide">
                                 <span>Use your</span>
                                 <CurrencyDisplay amount={currency} size="sm" />
                                 <span>to get permanent upgrades for your next runs</span>
@@ -272,7 +271,7 @@ export const GameOverScreen: React.FC<{
 
                     <button
                         onClick={onRestart}
-                        className={`w-full py-3 border font-mono text-sm uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 group hover:bg-white/10 ${selectedIndex === getButtonIndex('RESTART') ? 'border-white text-white bg-gray-800' : 'bg-black border-gray-700 text-gray-400 hover:border-white hover:text-white'}`}
+                        className={`w-full py-2 sm:py-3 border font-mono text-[10px] sm:text-sm uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 group hover:bg-white/10 ${selectedIndex === getButtonIndex('RESTART') ? 'border-white text-white bg-gray-800' : 'bg-black border-gray-700 text-gray-400 hover:border-white hover:text-white'}`}
                     >
                         START NEXT RUN
                     </button>
