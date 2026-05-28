@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { NeonButton, OverlayContainer } from '../Common';
 import { audioEngine } from '../../services/audioEngine';
 
-export const PauseMenu: React.FC<{ onResume: () => void, onQuit: () => void }> = ({ onResume, onQuit }) => {
+export const PauseMenu: React.FC<{ onResume: () => void, onQuit: () => void, onOpenDebug?: () => void }> = ({ onResume, onQuit, onOpenDebug }) => {
     const [isMuted, setIsMuted] = useState(audioEngine.isMuted);
 
     const handleToggleSound = () => {
@@ -20,6 +20,9 @@ export const PauseMenu: React.FC<{ onResume: () => void, onQuit: () => void }> =
                     <NeonButton onClick={handleToggleSound} variant="secondary">
                         Sound: {isMuted ? 'OFF' : 'ON'}
                     </NeonButton>
+                    {onOpenDebug && (
+                        <NeonButton onClick={onOpenDebug} variant="secondary">Debug Terminal</NeonButton>
+                    )}
                     <NeonButton onClick={onQuit} variant="danger">Abort Run</NeonButton>
                 </div>
             </div>

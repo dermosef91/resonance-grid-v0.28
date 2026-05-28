@@ -1,6 +1,7 @@
 
 import { Enemy, Player, Projectile, Pickup, TextParticle, EntityType, VisualParticle, MissionEntity, MissionType, ColorPalette, Vector2, Shockwave, EnemyType, Replica, Obstacle, MissionState } from '../types';
 import { COLORS, ZOOM_LEVEL } from '../constants';
+import { graphicsSettings } from './graphicsSettings';
 import { EnemyRenderRegistry } from './renderers';
 import { project3D, hexToRgba, parseColorToRgb, drawLightningBolt } from './renderUtils';
 import { drawBackground, drawLandscape, drawMegastructure, drawSierpinskiTetrahedron, LightSource, DistortionSource } from './renderers/backgroundRenderer';
@@ -141,7 +142,7 @@ export const renderGame = (
     // Trauma-style shake: a single directional impulse per frame with a
     // punchy (squared) response curve, rather than buzzy independent X/Y noise.
     let shakeX = 0, shakeY = 0;
-    if (screenShake > 0) {
+    if (screenShake > 0 && graphicsSettings.screenShake) {
         const trauma = Math.min(1, screenShake / 24);
         const mag = trauma * trauma * 24;
         const ang = Math.random() * Math.PI * 2;
@@ -1063,7 +1064,7 @@ export const renderGame = (
     }
 
     // --- DAMAGE IMPACT FLASH (2D fallback; GL handles this when post-fx is on) ---
-    if (redFlashTimer > 0 && !postFxActive) {
+    if (redFlashTimer > 0 && !postFxActive && graphicsSettings.damageFlash) {
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const a = Math.min(0.45, redFlashTimer / 15 * 0.45);
@@ -1076,7 +1077,7 @@ export const renderGame = (
     }
 
     // --- BLOOM (bright-pass -> blur -> additive composite) ---
-    applyBloom(ctx, dpr);
+    if (graphicsSettings.bloom) applyBloom(ctx, dpr);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.filter = 'none';

@@ -7,11 +7,15 @@ import { loadMetaState, saveMetaState, resetMetaState } from './services/persist
 import { useGameEngine } from './hooks/useGameEngine';
 import { MetaState } from './types';
 import { audioEngine } from './services/audioEngine';
+import { graphicsSettings } from './services/graphicsSettings';
 import { WEAPON_AUGMENTS } from './services/gameData';
 
 // Cap device pixel ratio so high-density phones (dpr 3) don't pay a 9x fill cost.
 const MAX_DPR = 2;
-export const getRenderDpr = () => Math.min(window.devicePixelRatio || 1, MAX_DPR);
+// When HiDPI is toggled off in the debug menu we render at 1:1 backing store
+// for performance. Toggling dispatches a 'resize' so the canvases re-sample.
+export const getRenderDpr = () =>
+  graphicsSettings.hiDpi ? Math.min(window.devicePixelRatio || 1, MAX_DPR) : 1;
 
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -154,6 +158,7 @@ const App: React.FC = () => {
         <PauseMenu
           onResume={togglePause}
           onQuit={() => setStatus('MENU')}
+          onOpenDebug={() => setShowDebug(true)}
         />
       )}
 
