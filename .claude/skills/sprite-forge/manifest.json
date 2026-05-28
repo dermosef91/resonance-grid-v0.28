@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "id": "_style_anchor",
+      "category": "_style",
+      "size": "1024x1024",
+      "prompt": "A single hero artifact that defines the whole art style: a fist-sized bio-mechanical relic of fused cast bronze and polished black obsidian, engraved with concentric Adinkra ritual glyphs, small gold-leaf inlays, and a warm-gold glowing emissive core at its center. It looks ancient yet machined.",
+      "references": []
+    },
+    {
+      "id": "player",
+      "category": "player",
+      "size": "1024x1024",
+      "prompt": "The player's vessel: a compact, agile bio-mechanical drone-ship shaped like a stylized bronze-and-obsidian beetle-seed. It has a bright emissive gold-cyan energy core at its center, four short angular bronze fins, and ornate engraved ritual glyphs. Sleek and heroic. It is clearly directional with a pointed nose oriented to the RIGHT of the frame.",
+      "references": ["_style_anchor"]
+    },
+    {
+      "id": "drone",
+      "category": "enemies",
+      "size": "1024x1024",
+      "prompt": "A small hostile recon drone enemy: a single floating tetrahedral shard of bronze and black obsidian with a glowing amber eye-core at its center, thin engraved edges, and a faintly menacing posture. Compact and roughly symmetrical seen from above.",
+      "references": ["_style_anchor"]
+    },
+    {
+      "id": "elite_drone",
+      "category": "enemies",
+      "size": "1024x1024",
+      "prompt": "An ELITE, heavier version of the referenced recon drone: larger and octahedral, with more gold inlay, extra armored bronze plating, and a brighter hostile red-amber emissive core. It must read as the same creature family, using the identical materials, lighting, and finish as the reference image.",
+      "references": ["drone"]
+    },
+    {
+      "id": "xp",
+      "category": "pickups",
+      "size": "1024x1024",
+      "prompt": "A collectible experience shard pickup: a faceted floating crystal of translucent blue-cyan energy set inside a small ornate bronze ring-mount with delicate gold filigree, gently glowing from within. Small and jewel-like, centered.",
+      "references": ["_style_anchor"]
+    }
+  ]
+}

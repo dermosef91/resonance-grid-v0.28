@@ -322,14 +322,7 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
         // Strong Blue Core Beam when Uploading
         if (isUploading) {
             ctx.save();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.shadowColor = '#00FFFF';
-            ctx.shadowBlur = 20;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(centerBot.x, centerBot.y);
-            ctx.lineTo(centerTop.x, centerTop.y - 1000); // Shoot up
-            ctx.stroke();
+            neonStroke(ctx, (c) => { c.moveTo(centerBot.x, centerBot.y); c.lineTo(centerTop.x, centerTop.y - 1000); }, '#FFFFFF', { width: 3 });
             ctx.restore();
         }
 
@@ -367,29 +360,23 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             [1, 2], [2, 4], [4, 3], [3, 1]  // Mid ring
         ];
 
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#00FFFF';
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
         ctx.lineJoin = 'round';
 
         // Draw Edges
-        ctx.beginPath();
-        edges.forEach(([i, j]) => {
-            ctx.moveTo(projected[i].x, projected[i].y);
-            ctx.lineTo(projected[j].x, projected[j].y);
-        });
-        ctx.stroke();
+        neonStroke(ctx, (c) => {
+            edges.forEach(([i, j]) => {
+                c.moveTo(projected[i].x, projected[i].y);
+                c.lineTo(projected[j].x, projected[j].y);
+            });
+        }, '#00FFFF', { width: 1.5 });
 
         // Inner Fill (Front facing approx)
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#00FFFF';
-        ctx.beginPath();
-        ctx.moveTo(projected[0].x, projected[0].y);
-        ctx.lineTo(projected[1].x, projected[1].y);
-        ctx.lineTo(projected[5].x, projected[5].y);
-        ctx.lineTo(projected[3].x, projected[3].y);
-        ctx.closePath();
-        ctx.fill();
+        neonPoly(ctx, [
+            { x: projected[0].x, y: projected[0].y },
+            { x: projected[1].x, y: projected[1].y },
+            { x: projected[5].x, y: projected[5].y },
+            { x: projected[3].x, y: projected[3].y },
+        ], '#00FFFF', { fillAlpha: 0.15, glow: false, core: false });
 
         // Orbiting Data Bits
         const bitCount = 3;
@@ -401,15 +388,9 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             const by = Math.sin(angle * 2) * (scale * 0.5); // Sine wave orbit
 
             const pb = project3D(bx, by, bz, rotX, rotY, rotZ, 300);
-
-            // Draw connecting line to core momentarily? No, just bits.
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.arc(pb.x, pb.y, 2, 0, Math.PI * 2);
-            ctx.fill();
+            neonOrb(ctx, pb.x, pb.y, 2, '#FFFFFF');
         }
 
-        ctx.shadowBlur = 0;
         ctx.restore();
     } else if (p.kind === 'TIME_CRYSTAL') {
         const t = frame * 0.05;
@@ -432,37 +413,32 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
 
         const projected = verts.map(v => project3D(v.x * scale, v.y * scale, v.z * scale, rotX, rotY, 0, 300));
 
-        ctx.strokeStyle = '#00FFFF';
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00FFFF';
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
-
         // Draw Top Pyramid (Tip to Base)
-        ctx.beginPath();
-        [1, 2, 3, 4].forEach(i => { ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[i].x, projected[i].y); });
-        // Connect to Waist
-        [1, 2, 3, 4].forEach(i => { ctx.moveTo(projected[i].x, projected[i].y); ctx.lineTo(projected[5].x, projected[5].y); });
-        ctx.stroke();
+        neonStroke(ctx, (c) => {
+            [1, 2, 3, 4].forEach(i => { c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[i].x, projected[i].y); });
+            [1, 2, 3, 4].forEach(i => { c.moveTo(projected[i].x, projected[i].y); c.lineTo(projected[5].x, projected[5].y); });
+        }, '#00FFFF', { width: 2 });
 
-        // Draw Bottom Pyramid (Waist to Base)
-        ctx.beginPath();
-        [6, 7, 8, 9].forEach(i => { ctx.moveTo(projected[5].x, projected[5].y); ctx.lineTo(projected[i].x, projected[i].y); });
-        // Connect to Bottom Tip
-        [6, 7, 8, 9].forEach(i => { ctx.moveTo(projected[i].x, projected[i].y); ctx.lineTo(projected[10].x, projected[10].y); });
-        ctx.fill();
-        ctx.stroke();
+        // Draw Bottom Pyramid (Waist to Base): keep translucent fill, neon-ize edges.
+        const bottomTrace = (c: CanvasRenderingContext2D) => {
+            [6, 7, 8, 9].forEach(i => { c.moveTo(projected[5].x, projected[5].y); c.lineTo(projected[i].x, projected[i].y); });
+            [6, 7, 8, 9].forEach(i => { c.moveTo(projected[i].x, projected[i].y); c.lineTo(projected[10].x, projected[10].y); });
+        };
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.beginPath(); bottomTrace(ctx); ctx.fill();
+        neonStroke(ctx, bottomTrace, '#00FFFF', { width: 2 });
 
-        ctx.shadowBlur = 0;
         ctx.restore();
     } else {
         // Standard Drops
         if (p.kind === 'HEALTH') {
             const size = 6; ctx.fillStyle = '#00FF00'; ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.fillRect(-size / 3, -size, size * 0.66, size * 2); ctx.fillRect(-size, -size / 3, size * 2, size * 0.66); ctx.restore();
         } else if (p.kind === 'CURRENCY') {
-            const size = 12; ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.rotate(frame * 0.1); ctx.fillStyle = '#FFD700';
-            ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size * 0.7, 0); ctx.lineTo(0, size); ctx.lineTo(-size * 0.7, 0); ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            const size = 12; ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.rotate(frame * 0.1);
+            neonPoly(ctx, [
+                { x: 0, y: -size }, { x: size * 0.7, y: 0 }, { x: 0, y: size }, { x: -size * 0.7, y: 0 },
+            ], '#FFD700', { fillAlpha: 0.9 });
+            neonOrb(ctx, 0, 0, size * 0.25, '#FFF'); ctx.restore();
         } else {
             // Pulsing Glow Effect for XP (no shadowBlur — uses radial gradient instead)
             const pulse = 1 + Math.sin(frame * 0.1) * 0.3;
@@ -485,22 +461,16 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             ctx.globalAlpha = 1;
 
             // Core Diamond
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.moveTo(p.pos.x, p.pos.y - r);
-            ctx.lineTo(p.pos.x + r, p.pos.y);
-            ctx.lineTo(p.pos.x, p.pos.y + r);
-            ctx.lineTo(p.pos.x - r, p.pos.y);
-            ctx.closePath();
-            ctx.fill();
+            neonPoly(ctx, [
+                { x: p.pos.x, y: p.pos.y - r },
+                { x: p.pos.x + r, y: p.pos.y },
+                { x: p.pos.x, y: p.pos.y + r },
+                { x: p.pos.x - r, y: p.pos.y },
+            ], p.color, { fillAlpha: 0.9 });
 
             // Outer Glow Ring
-            ctx.beginPath();
-            ctx.arc(p.pos.x, p.pos.y, r * 1.3 + pulse * (r * 0.4), 0, Math.PI * 2);
-            ctx.strokeStyle = p.color;
             ctx.globalAlpha = alpha;
-            ctx.lineWidth = Math.max(1, r * 0.3);
-            ctx.stroke();
+            neonStroke(ctx, (c) => { c.arc(p.pos.x, p.pos.y, r * 1.3 + pulse * (r * 0.4), 0, Math.PI * 2); }, p.color, { width: Math.max(1, r * 0.3), glow: false, core: false });
 
             ctx.restore();
         }

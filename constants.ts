@@ -18,6 +18,15 @@ export const POST_FX_ENABLED = true;
 export type GraphicsQuality = 'HIGH' | 'LOW';
 export const GRAPHICS_QUALITY: GraphicsQuality = isMobile ? 'LOW' : 'HIGH';
 
+// Option 3: authored sprite render path. When on, entities with a generated
+// sprite (public/sprites/sprite-index.json) draw the PNG instead of the
+// procedural mesh; anything without a sprite falls back to procedural.
+// Default OFF until the sprite set is generated & reviewed.
+export const USE_SPRITES = false;
+let _useSprites = USE_SPRITES;
+export const setUseSprites = (v: boolean) => { _useSprites = v; };
+export const getUseSprites = () => _useSprites;
+
 export const COLORS = {
   black: '#04040a',
   white: '#f0f0f0',
