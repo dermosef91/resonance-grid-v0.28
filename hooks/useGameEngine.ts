@@ -4,8 +4,9 @@ import {
     GameStatus, Player, Enemy, Projectile, Pickup, TextParticle, VisualParticle,
     Weapon, UpgradeOption, EntityType, EnemyType, MetaState, MissionState, MissionType, MissionEntity, WaveConfig, ColorPalette, TutorialStep, Shockwave, Replica, Obstacle, GameOverUnlockedItem
 } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE, POST_FX_ENABLED } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE } from '../constants';
 import { PostProcessor } from '../services/postFx/PostProcessor';
+import { graphicsSettings } from '../services/graphicsSettings';
 import {
     spawnEnemy, createXP, createCurrency, createHealthPickup, createTimeCrystal, createStasisFieldPickup,
     createSupplyDrop, createTextParticle, createShatterParticles, createPolygonShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle
@@ -1061,13 +1062,20 @@ export const useGameEngine = (
                     const viewH = window.innerHeight;
 
                     // Lazily create the WebGL post-processor on the overlay canvas.
+                    // `graphicsSettings.postFx` can flip at runtime (debug menu).
                     const glCanvas = glCanvasRef?.current;
-                    if (POST_FX_ENABLED && glCanvas && !postFxRef.current && !postFxFailedRef.current) {
+                    const postFxEnabled = graphicsSettings.postFx;
+                    if (postFxEnabled && glCanvas && !postFxRef.current && !postFxFailedRef.current) {
                         const pp = new PostProcessor(glCanvas);
                         if (pp.ok) postFxRef.current = pp;
                         else { postFxFailedRef.current = true; glCanvas.style.display = 'none'; }
                     }
-                    const postFxActive = !!postFxRef.current;
+                    const postFxActive = postFxEnabled && !!postFxRef.current;
+                    // Reveal/hide the overlay so toggling off exposes the raw 2D
+                    // frame (which then draws the software glitch/freeze/flash).
+                    if (glCanvas && !postFxFailedRef.current) {
+                        glCanvas.style.display = postFxActive ? 'block' : 'none';
+                    }
 
                     renderGame(
                         ctx, viewW, viewH, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
@@ -1078,7 +1086,7 @@ export const useGameEngine = (
                     );
 
                     // Post-process the finished 2D frame into the WebGL overlay.
-                    if (postFxRef.current && glCanvas) {
+                    if (postFxActive && glCanvas && postFxRef.current) {
                         // Subtle biome-coloured shadow grade derived from the active palette.
                         const tintRgb = parseColorToRgb(currentPaletteRef.current.nebulaPrimary);
                         const tint: [number, number, number] = tintRgb
@@ -1087,7 +1095,7 @@ export const useGameEngine = (
                         postFxRef.current.apply(canvasRef.current, {
                             glitch: glitchIntensityRef.current,
                             freeze: enemyFreezeTimerRef.current > 0 ? Math.min(1, enemyFreezeTimerRef.current / 20) : 0,
-                            redFlash: Math.min(1, redFlashTimerRef.current / 15),
+                            redFlash: graphicsSettings.damageFlash ? Math.min(1, redFlashTimerRef.current / 15) : 0,
                             tint,
                         });
                     }

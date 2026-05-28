@@ -4,6 +4,7 @@ import { UpgradeOption, EnemyType, MissionType } from '../../types';
 import { ALL_ENEMIES_DB, generateRunWaves } from '../../services/gameData';
 import { OverlayContainer } from '../Common';
 import { audioEngine, MusicTheme } from '../../services/audioEngine';
+import { graphicsSettings, GraphicsSettingKey } from '../../services/graphicsSettings';
 
 export const DebugMenu: React.FC<{
     generateOptions: () => UpgradeOption[],
@@ -14,7 +15,7 @@ export const DebugMenu: React.FC<{
     onSkipWave: () => void,
     onSpawnPickup: (kind: string) => void
 }> = ({ generateOptions, onSelect, onClose, onSpawnEnemy, onStartMission, onSkipWave, onSpawnPickup }) => {
-    const [tab, setTab] = useState<'SPAWN' | 'MISSION' | 'CHEATS' | 'LOOT' | 'AUDIO'>('SPAWN');
+    const [tab, setTab] = useState<'SPAWN' | 'MISSION' | 'CHEATS' | 'LOOT' | 'AUDIO' | 'GFX'>('SPAWN');
     const [refreshCounter, setRefreshCounter] = useState(0); // Used to force re-render on cheat select
 
     // generateOptions reads from mutable refs, so re-calling it on render gives fresh data
@@ -121,6 +122,35 @@ export const DebugMenu: React.FC<{
         </div>
     );
 
+    // Graphics feature toggles flip the live `graphicsSettings` singleton; the
+    // render loop reads it every frame so changes are visible immediately.
+    const gfxToggles: { key: GraphicsSettingKey, label: string, desc: string }[] = [
+        { key: 'postFx', label: 'WebGL Post-FX', desc: 'Bloom, color grade, CRT, glitch, freeze & damage flash' },
+        { key: 'bloom', label: '2D Bloom', desc: 'Additive bright-pass glow on the Canvas frame' },
+        { key: 'screenShake', label: 'Screen Shake', desc: 'Trauma-style directional camera kick' },
+        { key: 'damageFlash', label: 'Damage Flash', desc: 'Red radial flash when the player is hit' },
+        { key: 'hiDpi', label: 'HiDPI Rendering', desc: 'Render at device pixel ratio for crisp edges' },
+    ];
+
+    const renderGfxToggle = ({ key, label, desc }: { key: GraphicsSettingKey, label: string, desc: string }) => (
+        <button
+            key={key}
+            className={`flex items-start justify-between gap-3 p-3 border text-left ${graphicsSettings[key] ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-900'} hover:bg-gray-800`}
+            onClick={() => {
+                graphicsSettings[key] = !graphicsSettings[key];
+                // HiDPI changes the canvas backing-store size; re-sample via resize.
+                if (key === 'hiDpi') window.dispatchEvent(new Event('resize'));
+                setRefreshCounter(prev => prev + 1);
+            }}
+        >
+            <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold uppercase text-white">{label}</span>
+                <span className="text-[10px] text-gray-500 leading-tight mt-0.5">{desc}</span>
+            </div>
+            <div className={`w-3 h-3 rounded-full shrink-0 mt-1 ${graphicsSettings[key] ? 'bg-green-500' : 'bg-gray-600'}`}></div>
+        </button>
+    );
+
     const renderAudioToggle = (label: string, prop: keyof typeof audioEngine) => (
         <button
             className={`flex items-center justify-between p-2 border ${audioEngine[prop] ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-900'} hover:bg-gray-800`}
@@ -143,7 +173,7 @@ export const DebugMenu: React.FC<{
                 </div>
 
                 <div className="flex gap-2 mb-6 flex-wrap">
-                    {(['SPAWN', 'MISSION', 'CHEATS', 'LOOT', 'AUDIO'] as const).map(t => (
+                    {(['SPAWN', 'MISSION', 'CHEATS', 'LOOT', 'AUDIO', 'GFX'] as const).map(t => (
                         <button
                             key={t}
                             onClick={() => setTab(t)}
@@ -314,6 +344,16 @@ export const DebugMenu: React.FC<{
                             {renderAudioControl('Tempo Breath', 'tempoBreathingDepth', 0, 1, 0.05)}
                             {renderAudioControl('Overture Vol', 'overtureVolume', 0, 1, 0.05)}
                             {renderAudioControl('Silence Gap %', 'silenceChance', 0, 1, 0.05)}
+                        </div>
+                    )}
+
+                    {tab === 'GFX' && (
+                        <div className="flex flex-col gap-3">
+                            <div className="text-green-700 font-bold mb-1 border-b border-gray-800">GRAPHICS FIDELITY</div>
+                            <div className="text-[10px] text-gray-500 mb-1">Toggle the rendering features live. Useful for A/B comparison and for dropping effects on low-end devices.</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {gfxToggles.map(renderGfxToggle)}
+                            </div>
                         </div>
                     )}
                 </div>
