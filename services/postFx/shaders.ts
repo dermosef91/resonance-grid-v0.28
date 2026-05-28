@@ -22,6 +22,7 @@ uniform float uGlitch;    // 0..~30, drives chromatic split + slice jitter
 uniform float uFreeze;    // 0..1, blue desaturated frost
 uniform float uRedFlash;  // 0..1, damage flash
 uniform float uBloom;     // bloom strength
+uniform vec3 uTint;       // subtle per-biome shadow grade
 
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -72,7 +73,7 @@ void main() {
     col = (col - 0.5) * 1.08 + 0.5;
     float luma = dot(col, vec3(0.299, 0.587, 0.114));
     col = mix(vec3(luma), col, 1.14);
-    col += vec3(0.012, 0.0, 0.022) * (1.0 - luma);
+    col += uTint * (1.0 - luma);
 
     // Freeze frost.
     if (uFreeze > 0.001) {

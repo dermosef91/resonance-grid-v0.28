@@ -138,8 +138,16 @@ export const renderGame = (
         camX = 0;
         camY = 0;
     }
-    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
-    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+    // Trauma-style shake: a single directional impulse per frame with a
+    // punchy (squared) response curve, rather than buzzy independent X/Y noise.
+    let shakeX = 0, shakeY = 0;
+    if (screenShake > 0) {
+        const trauma = Math.min(1, screenShake / 24);
+        const mag = trauma * trauma * 24;
+        const ang = Math.random() * Math.PI * 2;
+        shakeX = Math.cos(ang) * mag;
+        shakeY = Math.sin(ang) * mag;
+    }
 
     const margin = 200; // Increased safety margin for culling
     const scaledCanvasWidth = canvasWidth / ZOOM_LEVEL;
@@ -1050,6 +1058,19 @@ export const renderGame = (
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = 'rgba(0, 50, 100, 0.15)';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.restore();
+    }
+
+    // --- DAMAGE IMPACT FLASH (2D fallback; GL handles this when post-fx is on) ---
+    if (redFlashTimer > 0 && !postFxActive) {
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const a = Math.min(0.45, redFlashTimer / 15 * 0.45);
+        const grad = ctx.createRadialGradient(canvasWidth / 2, canvasHeight / 2, canvasHeight * 0.3, canvasWidth / 2, canvasHeight / 2, canvasHeight);
+        grad.addColorStop(0, 'rgba(255, 0, 0, 0)');
+        grad.addColorStop(1, `rgba(255, 0, 0, ${a})`);
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         ctx.restore();
     }

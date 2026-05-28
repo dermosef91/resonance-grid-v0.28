@@ -14,7 +14,7 @@ import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
 import { audioEngine } from '../services/audioEngine';
 import { renderGame } from '../services/renderService';
-import { lerpPaletteColors } from '../services/renderUtils';
+import { lerpPaletteColors, parseColorToRgb } from '../services/renderUtils';
 import { BASE_WEAPONS, BASE_ARTIFACTS, getWavePalette } from '../services/gameData';
 import { saveMetaState } from '../services/persistence';
 import { trackEvent } from '../services/trackingService';
@@ -1079,10 +1079,16 @@ export const useGameEngine = (
 
                     // Post-process the finished 2D frame into the WebGL overlay.
                     if (postFxRef.current && glCanvas) {
+                        // Subtle biome-coloured shadow grade derived from the active palette.
+                        const tintRgb = parseColorToRgb(currentPaletteRef.current.nebulaPrimary);
+                        const tint: [number, number, number] = tintRgb
+                            ? [tintRgb.r / 255 * 0.06, tintRgb.g / 255 * 0.06, tintRgb.b / 255 * 0.06]
+                            : [0.012, 0.0, 0.022];
                         postFxRef.current.apply(canvasRef.current, {
                             glitch: glitchIntensityRef.current,
                             freeze: enemyFreezeTimerRef.current > 0 ? Math.min(1, enemyFreezeTimerRef.current / 20) : 0,
                             redFlash: Math.min(1, redFlashTimerRef.current / 15),
+                            tint,
                         });
                     }
                 }

@@ -11,6 +11,7 @@ export interface PostFxUniforms {
     glitch: number;
     freeze: number;
     redFlash: number;
+    tint?: [number, number, number];
 }
 
 export class PostProcessor {
@@ -53,7 +54,7 @@ export class PostProcessor {
         gl.enableVertexAttribArray(aPos);
         gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-        for (const name of ['uTex', 'uResolution', 'uTime', 'uGlitch', 'uFreeze', 'uRedFlash', 'uBloom']) {
+        for (const name of ['uTex', 'uResolution', 'uTime', 'uGlitch', 'uFreeze', 'uRedFlash', 'uBloom', 'uTint']) {
             this.uniforms[name] = gl.getUniformLocation(program, name);
         }
 
@@ -114,6 +115,8 @@ export class PostProcessor {
         gl.uniform1f(this.uniforms.uFreeze, u.freeze);
         gl.uniform1f(this.uniforms.uRedFlash, u.redFlash);
         gl.uniform1f(this.uniforms.uBloom, 0.35);
+        const t = u.tint || [0.012, 0.0, 0.022];
+        gl.uniform3f(this.uniforms.uTint, t[0], t[1], t[2]);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
