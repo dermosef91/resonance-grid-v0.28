@@ -7,6 +7,10 @@ export const CANVAS_HEIGHT = 800;
 const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 export const ZOOM_LEVEL = isMobile ? 0.6 : 0.8;
 
+// WebGL post-processing layer (bloom/grading/CRT/glitch). Falls back to the
+// raw Canvas 2D frame automatically if WebGL init fails.
+export const POST_FX_ENABLED = true;
+
 export const COLORS = {
   black: '#050505',
   white: '#f0f0f0',

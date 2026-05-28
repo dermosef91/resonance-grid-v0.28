@@ -1,10 +1,11 @@
 
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
     GameStatus, Player, Enemy, Projectile, Pickup, TextParticle, VisualParticle,
     Weapon, UpgradeOption, EntityType, EnemyType, MetaState, MissionState, MissionType, MissionEntity, WaveConfig, ColorPalette, TutorialStep, Shockwave, Replica, Obstacle, GameOverUnlockedItem
 } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE, POST_FX_ENABLED } from '../constants';
+import { PostProcessor } from '../services/postFx/PostProcessor';
 import {
     spawnEnemy, createXP, createCurrency, createHealthPickup, createTimeCrystal, createStasisFieldPickup,
     createSupplyDrop, createTextParticle, createShatterParticles, createPolygonShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle
@@ -13,7 +14,7 @@ import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
 import { audioEngine } from '../services/audioEngine';
 import { renderGame } from '../services/renderService';
-import { lerpPaletteColors } from '../services/renderUtils';
+import { lerpPaletteColors, parseColorToRgb } from '../services/renderUtils';
 import { BASE_WEAPONS, BASE_ARTIFACTS, getWavePalette } from '../services/gameData';
 import { saveMetaState } from '../services/persistence';
 import { trackEvent } from '../services/trackingService';
@@ -45,8 +46,13 @@ const SPECIAL_WAVE_POOLS: Record<number, EnemyType[]> = {
 export const useGameEngine = (
     canvasRef: React.RefObject<HTMLCanvasElement>,
     metaState: MetaState,
-    setMetaState: React.Dispatch<React.SetStateAction<MetaState>>
+    setMetaState: React.Dispatch<React.SetStateAction<MetaState>>,
+    glCanvasRef?: React.RefObject<HTMLCanvasElement>
 ) => {
+    // WebGL post-processor (lazily created on first frame; null until then).
+    const postFxRef = useRef<PostProcessor | null>(null);
+    const postFxFailedRef = useRef(false);
+
     // Destructure everything from the Game State Hook
     const gameState = useGameState(metaState);
     const {
@@ -1048,12 +1054,43 @@ export const useGameEngine = (
                         }
                     }
 
+                    // Logical (CSS-pixel) viewport; backing store is dpr-scaled so all
+                    // screen-space math stays in logical pixels while drawing stays crisp.
+                    const dpr = canvasRef.current.height / Math.max(1, window.innerHeight) || 1;
+                    const viewW = window.innerWidth;
+                    const viewH = window.innerHeight;
+
+                    // Lazily create the WebGL post-processor on the overlay canvas.
+                    const glCanvas = glCanvasRef?.current;
+                    if (POST_FX_ENABLED && glCanvas && !postFxRef.current && !postFxFailedRef.current) {
+                        const pp = new PostProcessor(glCanvas);
+                        if (pp.ok) postFxRef.current = pp;
+                        else { postFxFailedRef.current = true; glCanvas.style.display = 'none'; }
+                    }
+                    const postFxActive = !!postFxRef.current;
+
                     renderGame(
-                        ctx, canvasRef.current.width, canvasRef.current.height, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
+                        ctx, viewW, viewH, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
                         targets, missionEntitiesRef.current, undefined, missionRef.current, missionRef.current.type,
                         glitchIntensityRef.current, currentPaletteRef.current, tutorialPickup, shockwavesRef.current, replicasRef.current, enemyFreezeTimerRef.current > 0, redFlashTimerRef.current,
-                        obstaclesRef.current, waveIndexRef.current + 1 // Pass Obstacles + current Wave ID (1-based)
+                        obstaclesRef.current, waveIndexRef.current + 1, // Pass Obstacles + current Wave ID (1-based)
+                        dpr, postFxActive
                     );
+
+                    // Post-process the finished 2D frame into the WebGL overlay.
+                    if (postFxRef.current && glCanvas) {
+                        // Subtle biome-coloured shadow grade derived from the active palette.
+                        const tintRgb = parseColorToRgb(currentPaletteRef.current.nebulaPrimary);
+                        const tint: [number, number, number] = tintRgb
+                            ? [tintRgb.r / 255 * 0.06, tintRgb.g / 255 * 0.06, tintRgb.b / 255 * 0.06]
+                            : [0.012, 0.0, 0.022];
+                        postFxRef.current.apply(canvasRef.current, {
+                            glitch: glitchIntensityRef.current,
+                            freeze: enemyFreezeTimerRef.current > 0 ? Math.min(1, enemyFreezeTimerRef.current / 20) : 0,
+                            redFlash: Math.min(1, redFlashTimerRef.current / 15),
+                            tint,
+                        });
+                    }
                 }
             }
             animationId = requestAnimationFrame(loop);

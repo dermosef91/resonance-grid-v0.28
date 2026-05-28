@@ -645,8 +645,29 @@ export const drawProjectiles = (
             if (p.mineData.pullRadius > 0) { ctx.strokeStyle = 'rgba(255, 102, 0, 0.2)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, p.mineData.pullRadius, 0, Math.PI * 2); ctx.stroke(); }
             ctx.restore();
         } else {
+            // STANDARD PROJECTILE: additive neon glow halo + bright core.
             ctx.save();
-            ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.translate(p.pos.x, p.pos.y);
+            const rgb = parseColorToRgb(p.color) || { r: 255, g: 102, b: 0 };
+            const glowR = p.radius * 3.2;
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
+            glow.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9)`);
+            glow.addColorStop(0.4, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`);
+            glow.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(0, 0, glowR, 0, Math.PI * 2); ctx.fill();
+
+            // Solid body with a hot, near-white centre for that "energy" read.
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.fill();
+            const coreR = p.radius * 0.5;
+            const core = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(0.5, coreR));
+            core.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+            core.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+            ctx.fillStyle = core;
+            ctx.beginPath(); ctx.arc(0, 0, coreR, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
         }
     });
