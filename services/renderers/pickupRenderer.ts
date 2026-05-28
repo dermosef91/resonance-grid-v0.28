@@ -2,6 +2,7 @@
 import { Pickup } from '../../types';
 import { getDropStyle, project3D, drawLightningBolt } from '../renderUtils';
 import { COLORS } from '../../constants';
+import { neonStroke, neonPoly, neonOrb } from './neonRender';
 
 export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: number, viewBounds: { left: number, right: number, top: number, bottom: number }) => {
     if (p.pos.x < viewBounds.left || p.pos.x > viewBounds.right || p.pos.y < viewBounds.top || p.pos.y > viewBounds.bottom) {
@@ -30,11 +31,7 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
 
         // Cycle colors
         const hue = (frame * 2) % 360;
-        ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
-        ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.3)`;
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ctx.strokeStyle;
+        const strokeCol = `hsl(${hue}, 100%, 70%)`;
 
         // Draw Faces (Tip to Base)
         const baseIndices = [1, 2, 4, 3];
@@ -42,16 +39,13 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
         // Draw sides
         baseIndices.forEach((idx, i) => {
             const nextIdx = baseIndices[(i + 1) % baseIndices.length];
-            ctx.beginPath();
-            ctx.moveTo(projected[0].x, projected[0].y);
-            ctx.lineTo(projected[idx].x, projected[idx].y);
-            ctx.lineTo(projected[nextIdx].x, projected[nextIdx].y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            neonPoly(ctx, [
+                { x: projected[0].x, y: projected[0].y },
+                { x: projected[idx].x, y: projected[idx].y },
+                { x: projected[nextIdx].x, y: projected[nextIdx].y },
+            ], strokeCol, { fillAlpha: 0.3, width: 2 });
         });
 
-        ctx.shadowBlur = 0;
         ctx.restore();
     } else if (p.kind === 'STASIS_FIELD') {
         const t = frame * 0.03;
@@ -62,11 +56,6 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
         // Rotating Snowflake/Star
         const size = 15;
         const arms = 6;
-
-        ctx.strokeStyle = '#0088FF';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#0000FF';
-        ctx.shadowBlur = 15;
 
         // Background Glow
         const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 20);
@@ -81,21 +70,17 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             const angle = (i / arms) * Math.PI * 2;
             ctx.save();
             ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(size, 0);
-            // Branch
-            ctx.moveTo(size * 0.6, 0); ctx.lineTo(size * 0.8, -4);
-            ctx.moveTo(size * 0.6, 0); ctx.lineTo(size * 0.8, 4);
-            ctx.stroke();
+            neonStroke(ctx, (c) => {
+                c.moveTo(0, 0);
+                c.lineTo(size, 0);
+                c.moveTo(size * 0.6, 0); c.lineTo(size * 0.8, -4);
+                c.moveTo(size * 0.6, 0); c.lineTo(size * 0.8, 4);
+            }, '#0088FF', { width: 2 });
             ctx.restore();
         }
 
-        ctx.shadowBlur = 0;
-
         // Core
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+        neonOrb(ctx, 0, 0, 3, '#FFFFFF');
 
         ctx.restore();
     } else if (p.kind === 'SUPPLY_DROP') {
@@ -108,23 +93,28 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
         const content = p.supplyContent || 'LEVEL_UP';
 
         if (content === 'LEVEL_UP') {
-            const size = 20; const rot = frame * 0.02; ctx.lineWidth = 2; ctx.strokeStyle = style.hex; ctx.shadowColor = style.hex; ctx.shadowBlur = 10; ctx.fillStyle = 'rgba(0, 20, 30, 0.8)';
-            for (let i = 0; i < 3; i++) { const offset = (Math.PI * 2 / 3) * i; const r = size; const x = Math.cos(rot + offset) * r; const y = Math.sin(rot + offset) * (r * 0.3); ctx.beginPath(); ctx.rect(x - size / 2, y - size / 2, size, size); ctx.fill(); ctx.stroke(); }
-            ctx.fillStyle = '#fff'; ctx.shadowBlur = 20; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+            const size = 20; const rot = frame * 0.02;
+            for (let i = 0; i < 3; i++) {
+                const offset = (Math.PI * 2 / 3) * i; const r = size; const x = Math.cos(rot + offset) * r; const y = Math.sin(rot + offset) * (r * 0.3);
+                ctx.fillStyle = 'rgba(0, 20, 30, 0.8)'; ctx.beginPath(); ctx.rect(x - size / 2, y - size / 2, size, size); ctx.fill();
+                neonStroke(ctx, (c) => { c.rect(x - size / 2, y - size / 2, size, size); }, style.hex, { width: 2 });
+            }
+            neonOrb(ctx, 0, 0, 4, '#fff');
         } else if (content === 'FULL_HEALTH') {
             const drawCross = (x: number, y: number, s: number) => { ctx.fillRect(x - s / 3, y - s, s * 0.66, s * 2); ctx.fillRect(x - s, y - s / 3, s * 2, s * 0.66); };
-            ctx.fillStyle = style.hex; ctx.shadowColor = style.hex; ctx.shadowBlur = 10; drawCross(0, 0, 10);
+            ctx.fillStyle = style.hex; drawCross(0, 0, 10);
             const orbitSpeed = frame * 0.05; for (let i = 0; i < 2; i++) { const angle = orbitSpeed + i * Math.PI; const r = 20; drawCross(Math.cos(angle) * r, Math.sin(angle) * r, 6); }
         } else if (content === 'CURRENCY_50') {
-            ctx.strokeStyle = style.hex; ctx.fillStyle = 'rgba(20, 20, 0, 0.8)'; ctx.lineWidth = 2; ctx.shadowColor = style.hex; ctx.shadowBlur = 10; ctx.rotate(Math.sin(frame * 0.05) * 0.2);
-            const w = 24, h = 30; ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
-            ctx.beginPath(); for (let i = 0; i < 4; i++) { const y = -h / 2 + 6 + i * 6; ctx.moveTo(-w / 2, y); ctx.lineTo(-w / 2 - 4, y); ctx.moveTo(w / 2, y); ctx.lineTo(w / 2 + 4, y); } ctx.stroke();
+            ctx.rotate(Math.sin(frame * 0.05) * 0.2);
+            const w = 24, h = 30;
+            ctx.fillStyle = 'rgba(20, 20, 0, 0.8)'; ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.fill();
+            neonStroke(ctx, (c) => { c.rect(-w / 2, -h / 2, w, h); }, style.hex, { width: 2 });
+            neonStroke(ctx, (c) => { for (let i = 0; i < 4; i++) { const y = -h / 2 + 6 + i * 6; c.moveTo(-w / 2, y); c.lineTo(-w / 2 - 4, y); c.moveTo(w / 2, y); c.lineTo(w / 2 + 4, y); } }, style.hex, { width: 2, glow: false, core: false });
             ctx.fillStyle = style.hex; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText("$", 0, 0);
         } else if (content === 'TEMPORAL_BOOST') {
-            ctx.strokeStyle = style.hex; ctx.lineWidth = 2; ctx.shadowColor = style.hex; ctx.shadowBlur = 15;
-            const drawHex = (r: number) => { ctx.beginPath(); for (let i = 0; i < 6; i++) { const angle = (i / 6) * Math.PI * 2; const x = Math.cos(angle) * r; const y = Math.sin(angle) * r; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); ctx.stroke(); };
+            const drawHex = (r: number) => { neonStroke(ctx, (c) => { for (let i = 0; i < 6; i++) { const angle = (i / 6) * Math.PI * 2; const x = Math.cos(angle) * r; const y = Math.sin(angle) * r; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.closePath(); }, style.hex, { width: 2 }); };
             ctx.rotate(frame * 0.02); drawHex(15); ctx.rotate(frame * 0.02); drawHex(8);
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+            neonOrb(ctx, 0, 0, 3, '#fff');
         } else if (content === 'EXTRA_LIFE') {
             const s = 10; const spin = frame * 0.05; const spinCos = Math.cos(spin); const spinSin = Math.sin(spin);
             const phi = 1.618;
@@ -133,15 +123,20 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             const projVerts = verts.map(v => { const rx = v.x * spinCos - v.z * spinSin; const rz = v.x * spinSin + v.z * spinCos; return project3D(rx * s, v.y * s, rz * s, 0, 0, 0, 300); });
             const sortedFaces = faces.map(f => { const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]]; const depth = (v0.depth + v1.depth + v2.depth) / 3; return { v0, v1, v2, depth }; }).sort((a, b) => b.depth - a.depth);
 
-            // Player Core Style: Orange orb, White outlines
+            // Player Core Style: glassy orange body (depth-brightened) + crisp white outlines.
+            const depths = sortedFaces.map(f => f.depth);
+            const minD = Math.min(...depths); const maxD = Math.max(...depths);
+            const depthRange = maxD - minD || 1;
             ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 1.5;
-            ctx.fillStyle = COLORS.orange;
-            ctx.shadowColor = COLORS.orange;
-            ctx.shadowBlur = 5;
-
-            sortedFaces.forEach(f => { ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.fill(); ctx.stroke(); });
-            ctx.shadowBlur = 0;
+            sortedFaces.forEach(f => {
+                const brightness = (f.depth - minD) / depthRange; // nearer (larger depth) brighter
+                neonPoly(ctx, [
+                    { x: f.v0.x, y: f.v0.y }, { x: f.v1.x, y: f.v1.y }, { x: f.v2.x, y: f.v2.y },
+                ], COLORS.orange, { fillAlpha: 0.9, brightness, glow: false, core: false });
+                ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.stroke();
+            });
 
             // Text
             ctx.fillStyle = '#FFFFFF';
@@ -175,18 +170,10 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
 
         // Outer Ring
         const rOuter = p.radius + (kickEnv * 20);
-        ctx.beginPath();
-        ctx.arc(0, 0, rOuter, 0, Math.PI * 2);
-
-        const outerColor = isUploading ? '#00FFFF' : '#00FF66';
-        ctx.strokeStyle = isUploading
+        const outerStroke = isUploading
             ? `rgba(0, 255, 255, ${0.5 + kickEnv * 0.5})`
             : `rgba(0, 255, 100, ${0.3 + kickEnv * 0.4})`;
-
-        ctx.lineWidth = 2 + kickEnv * 4;
-        ctx.shadowColor = outerColor;
-        ctx.shadowBlur = 10 * kickEnv;
-        ctx.stroke();
+        neonStroke(ctx, (c) => { c.arc(0, 0, rOuter, 0, Math.PI * 2); }, outerStroke, { width: 2 + kickEnv * 4 });
 
         // Inner Ripples
         const rippleCount = 3;
@@ -194,14 +181,10 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             const phase = (frame * 0.05 + i * (Math.PI * 2 / rippleCount)) % (Math.PI * 2);
             const rRipple = (phase / (Math.PI * 2)) * p.radius;
             const alpha = 1 - (rRipple / p.radius);
-
-            ctx.beginPath();
-            ctx.arc(0, 0, rRipple, 0, Math.PI * 2);
-            ctx.strokeStyle = isUploading
+            const rippleCol = isUploading
                 ? `rgba(0, 255, 255, ${alpha * 0.8})`
                 : `rgba(0, 255, 255, ${alpha * 0.5})`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            neonStroke(ctx, (c) => { c.arc(0, 0, rRipple, 0, Math.PI * 2); }, rippleCol, { width: 1, glow: false, core: false });
         }
         ctx.restore();
 
@@ -262,47 +245,44 @@ export const drawPickup = (ctx: CanvasRenderingContext2D, p: Pickup, frame: numb
             const pTop = vTop.map(v => project3D(v.x, v.y, v.z, 0.5, 0, 0, 600));
             const pBot = vBot.map(v => project3D(v.x, v.y, v.z, 0.5, 0, 0, 600));
 
-            // Draw Sides
-            const drawQuad = (i1: number, i2: number, color: string) => {
-                ctx.beginPath();
-                ctx.moveTo(pTop[i1].x, pTop[i1].y);
-                ctx.lineTo(pTop[i2].x, pTop[i2].y);
-                ctx.lineTo(pBot[i2].x, pBot[i2].y);
-                ctx.lineTo(pBot[i1].x, pBot[i1].y);
-                ctx.closePath();
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.stroke();
-            };
-
             const isActive = kickEnv > 0.1 || isUploading;
             const strokeCol = isActive
                 ? (isUploading ? '#00FFFF' : '#00FFaa')
                 : '#005533';
-            ctx.strokeStyle = strokeCol;
+
+            // Draw Sides: keep dark occluder fill, neon-ize the outline.
+            const drawQuad = (i1: number, i2: number, color: string) => {
+                const pts = [
+                    { x: pTop[i1].x, y: pTop[i1].y },
+                    { x: pTop[i2].x, y: pTop[i2].y },
+                    { x: pBot[i2].x, y: pBot[i2].y },
+                    { x: pBot[i1].x, y: pBot[i1].y },
+                ];
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.lineTo(pts[3].x, pts[3].y); ctx.closePath();
+                ctx.fill();
+                neonStroke(ctx, (c) => { c.moveTo(pts[0].x, pts[0].y); c.lineTo(pts[1].x, pts[1].y); c.lineTo(pts[2].x, pts[2].y); c.lineTo(pts[3].x, pts[3].y); c.closePath(); }, strokeCol, { width: 1, glow: false, core: false });
+            };
 
             // Draw all sides
-            ctx.fillStyle = `rgba(10, 20, 15, 0.9)`;
+            const sideFill = `rgba(10, 20, 15, 0.9)`;
+            drawQuad(0, 1, sideFill);
+            drawQuad(1, 2, sideFill);
+            drawQuad(2, 3, sideFill);
+            drawQuad(3, 0, sideFill);
 
-            // Side 1
-            drawQuad(0, 1, ctx.fillStyle as string);
-            drawQuad(1, 2, ctx.fillStyle as string);
-            drawQuad(2, 3, ctx.fillStyle as string);
-            drawQuad(3, 0, ctx.fillStyle as string);
-
-            // Top Cap
+            // Top Cap: keep glow fill, neon-ize outline.
+            const topColorBase = isUploading ? '0, 255, 255' : '0, 255, 170';
+            ctx.fillStyle = `rgba(${topColorBase}, ${0.2 + (pillar.h / 150)})`;
             ctx.beginPath();
             ctx.moveTo(pTop[0].x, pTop[0].y);
             ctx.lineTo(pTop[1].x, pTop[1].y);
             ctx.lineTo(pTop[2].x, pTop[2].y);
             ctx.lineTo(pTop[3].x, pTop[3].y);
             ctx.closePath();
-
-            // Top Glow
-            const topColorBase = isUploading ? '0, 255, 255' : '0, 255, 170';
-            ctx.fillStyle = `rgba(${topColorBase}, ${0.2 + (pillar.h / 150)})`;
             ctx.fill();
-            ctx.stroke();
+            neonStroke(ctx, (c) => { c.moveTo(pTop[0].x, pTop[0].y); c.lineTo(pTop[1].x, pTop[1].y); c.lineTo(pTop[2].x, pTop[2].y); c.lineTo(pTop[3].x, pTop[3].y); c.closePath(); }, strokeCol, { width: 1, glow: false, core: false });
 
             // 3. Electric Arcs (on Kick)
             if (kickEnv > 0.6 && Math.random() > 0.7) {

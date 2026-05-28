@@ -10,7 +10,7 @@ import { drawMissionEntity } from './renderers/MissionRenderer';
 import { drawAbyssalLoop } from './renderers/EffectRenderer';
 import { drawProjectiles } from './renderers/ProjectileRenderer';
 import { drawObstacle } from './renderers/ObstacleRenderer';
-import { getNeonQuality } from './renderers/neonRender';
+import { getNeonQuality, setGlowPulse, beatPulse } from './renderers/neonRender';
 
 // --- Offscreen bloom buffer (cached across frames to avoid per-frame allocation) ---
 let bloomCanvas: HTMLCanvasElement | null = null;
@@ -142,6 +142,10 @@ export const renderGame = (
     dpr: number = 1,
     postFxActive: boolean = false
 ) => {
+    // "Liquid Light" breathing: a subtle global glow pulse so the whole scene
+    // gently throbs in unison. Read by every neon primitive this frame.
+    setGlowPulse(beatPulse(frame, 1, 0.06, 0.06));
+
     // Apply Camera & Shake & Zoom
     let camX = camera.x;
     let camY = camera.y;
