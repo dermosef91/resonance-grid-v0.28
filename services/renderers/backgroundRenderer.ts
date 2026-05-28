@@ -316,10 +316,11 @@ export const drawBackground = (
     canvasHeight: number,
     camera: { x: number, y: number },
     frame: number,
-    palette: ColorPalette
+    palette: ColorPalette,
+    dpr: number = 1
 ) => {
     // 1. Solid Background
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = palette.background;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 

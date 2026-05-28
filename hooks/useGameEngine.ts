@@ -45,7 +45,8 @@ const SPECIAL_WAVE_POOLS: Record<number, EnemyType[]> = {
 export const useGameEngine = (
     canvasRef: React.RefObject<HTMLCanvasElement>,
     metaState: MetaState,
-    setMetaState: React.Dispatch<React.SetStateAction<MetaState>>
+    setMetaState: React.Dispatch<React.SetStateAction<MetaState>>,
+    glCanvasRef?: React.RefObject<HTMLCanvasElement>
 ) => {
     // Destructure everything from the Game State Hook
     const gameState = useGameState(metaState);
@@ -1048,11 +1049,17 @@ export const useGameEngine = (
                         }
                     }
 
+                    // Logical (CSS-pixel) viewport; backing store is dpr-scaled so all
+                    // screen-space math stays in logical pixels while drawing stays crisp.
+                    const dpr = canvasRef.current.height / Math.max(1, window.innerHeight) || 1;
+                    const viewW = window.innerWidth;
+                    const viewH = window.innerHeight;
                     renderGame(
-                        ctx, canvasRef.current.width, canvasRef.current.height, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
+                        ctx, viewW, viewH, cameraRef.current, playerRef.current, enemiesRef.current, projectilesRef.current, pickupsRef.current, particlesRef.current, frameRef.current, screenShakeRef.current,
                         targets, missionEntitiesRef.current, undefined, missionRef.current, missionRef.current.type,
                         glitchIntensityRef.current, currentPaletteRef.current, tutorialPickup, shockwavesRef.current, replicasRef.current, enemyFreezeTimerRef.current > 0, redFlashTimerRef.current,
-                        obstaclesRef.current, waveIndexRef.current + 1 // Pass Obstacles + current Wave ID (1-based)
+                        obstaclesRef.current, waveIndexRef.current + 1, // Pass Obstacles + current Wave ID (1-based)
+                        dpr
                     );
                 }
             }

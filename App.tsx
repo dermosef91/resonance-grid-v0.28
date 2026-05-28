@@ -9,8 +9,13 @@ import { MetaState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { WEAPON_AUGMENTS } from './services/gameData';
 
+// Cap device pixel ratio so high-density phones (dpr 3) don't pay a 9x fill cost.
+const MAX_DPR = 2;
+export const getRenderDpr = () => Math.min(window.devicePixelRatio || 1, MAX_DPR);
+
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glCanvasRef = useRef<HTMLCanvasElement>(null);
   const [metaState, setMetaState] = useState<MetaState>(() => loadMetaState());
 
   const {
@@ -40,7 +45,31 @@ const App: React.FC = () => {
     augmentTarget,
     applyAugment,
     handleDebugPickup
-  } = useGameEngine(canvasRef, metaState, setMetaState);
+  } = useGameEngine(canvasRef, metaState, setMetaState, glCanvasRef);
+
+  // Size the game + post-processing canvases at devicePixelRatio for crisp HiDPI
+  // rendering, and keep them in sync with viewport/orientation changes.
+  useEffect(() => {
+    const resize = () => {
+      const dpr = getRenderDpr();
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      for (const c of [canvasRef.current, glCanvasRef.current]) {
+        if (!c) continue;
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+        c.style.width = `${w}px`;
+        c.style.height = `${h}px`;
+      }
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('orientationchange', resize);
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== 'LEVEL_UP') return;
@@ -99,9 +128,11 @@ const App: React.FC = () => {
     <>
       <canvas
         ref={canvasRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
         className="block fixed inset-0 bg-black touch-none"
+      />
+      <canvas
+        ref={glCanvasRef}
+        className="block fixed inset-0 pointer-events-none"
       />
       {status === 'PLAYING' && <Joystick />}
       {(status === 'PLAYING' || status === 'PAUSED' || status === 'LEVEL_UP' || status === 'MISSION_COMPLETE' || status === 'AUGMENT_SELECT') && (

@@ -11,6 +11,49 @@ import { drawAbyssalLoop } from './renderers/EffectRenderer';
 import { drawProjectiles } from './renderers/ProjectileRenderer';
 import { drawObstacle } from './renderers/ObstacleRenderer';
 
+// --- Offscreen bloom buffer (cached across frames to avoid per-frame allocation) ---
+let bloomCanvas: HTMLCanvasElement | null = null;
+let bloomCtx: CanvasRenderingContext2D | null = null;
+
+// Bright-pass downscale + blur, composited back additively so neon/energy glows.
+const applyBloom = (ctx: CanvasRenderingContext2D, dpr: number) => {
+    const bw = ctx.canvas.width;
+    const bh = ctx.canvas.height;
+    if (bw <= 0 || bh <= 0) return;
+
+    const scale = 0.5; // half-res bloom buffer for performance
+    const lowW = Math.max(1, Math.round(bw * scale));
+    const lowH = Math.max(1, Math.round(bh * scale));
+
+    if (!bloomCanvas) {
+        bloomCanvas = document.createElement('canvas');
+        bloomCtx = bloomCanvas.getContext('2d');
+    }
+    if (!bloomCtx) return;
+    if (bloomCanvas.width !== lowW || bloomCanvas.height !== lowH) {
+        bloomCanvas.width = lowW;
+        bloomCanvas.height = lowH;
+    }
+
+    // Bright-pass: emphasise highlights, then blur (in low-res space for a wide, cheap glow).
+    const blurPx = Math.max(1, Math.round(3 * dpr));
+    bloomCtx.setTransform(1, 0, 0, 1, 0, 0);
+    bloomCtx.globalCompositeOperation = 'source-over';
+    bloomCtx.clearRect(0, 0, lowW, lowH);
+    bloomCtx.filter = `brightness(1.5) contrast(1.7) blur(${blurPx}px)`;
+    bloomCtx.drawImage(ctx.canvas, 0, 0, lowW, lowH);
+    bloomCtx.filter = 'none';
+
+    // Additive composite back at full backing resolution.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bloomCanvas, 0, 0, bw, bh);
+    ctx.restore();
+};
+
 export const drawEnemy = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
     ctx.translate(e.pos.x, e.pos.y);
@@ -82,7 +125,8 @@ export const renderGame = (
     isFrozen: boolean = false,
     redFlashTimer: number = 0,
     obstacles: Obstacle[] = [],
-    waveId: number = 1
+    waveId: number = 1,
+    dpr: number = 1
 ) => {
     // Apply Camera & Shake & Zoom
     let camX = camera.x;
@@ -478,7 +522,9 @@ export const renderGame = (
     });
 
     // 1. Background Layer (Pass arrays populated with on-screen entities only)
-    drawBackground(ctx, canvasWidth, canvasHeight, camera, frame, palette);
+    drawBackground(ctx, canvasWidth, canvasHeight, camera, frame, palette, dpr);
+    // Ensure subsequent screen-space background effects build on the dpr base.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // --- MEGASTRUCTURE (Wave 7) ---
     if (waveId === 7) {
@@ -493,7 +539,7 @@ export const renderGame = (
     // --- GREAT FILTER RED WARNING BACKGROUND (Under Grid) ---
     if (activeMissionType === MissionType.THE_GREAT_FILTER) {
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const alpha = 0.15 + Math.sin(frame * 0.1) * 0.1;
         ctx.fillStyle = `rgba(100, 0, 0, ${alpha})`;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -505,7 +551,7 @@ export const renderGame = (
         const solarData = (missionProgress as MissionState)?.customData?.solarData;
         if (solarData) {
             ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             if (solarData.state === 'WARNING') {
                 // Red/Orange Warning Flash - Softer
@@ -575,6 +621,7 @@ export const renderGame = (
 
     // --- Joy Division Topographic Landscape ---
     ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.scale(ZOOM_LEVEL, ZOOM_LEVEL);
     ctx.translate(-camX + shakeX, -camY + shakeY);
 
@@ -819,7 +866,7 @@ export const renderGame = (
     // --- Supply Drop, Boss & Mission Indicators (Screen Space) ---
 
     // --- Supply Drop, Boss & Mission Indicators (Screen Space) ---
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const drawIndicator = (pos: { x: number, y: number }, color: string, label?: string) => {
         const screenX = (pos.x - camX) * ZOOM_LEVEL;
@@ -999,21 +1046,16 @@ export const renderGame = (
 
     if (isFrozen) {
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = 'rgba(0, 50, 100, 0.15)';
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         ctx.restore();
     }
 
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = 'screen';
-    ctx.filter = 'blur(10px) brightness(1.2)';
-    ctx.globalAlpha = 0.25;
-    ctx.drawImage(ctx.canvas, 0, 0);
-    ctx.restore();
+    // --- BLOOM (bright-pass -> blur -> additive composite) ---
+    applyBloom(ctx, dpr);
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.filter = 'none';
 }
