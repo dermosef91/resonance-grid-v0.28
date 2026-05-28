@@ -126,7 +126,8 @@ export const renderGame = (
     redFlashTimer: number = 0,
     obstacles: Obstacle[] = [],
     waveId: number = 1,
-    dpr: number = 1
+    dpr: number = 1,
+    postFxActive: boolean = false
 ) => {
     // Apply Camera & Shake & Zoom
     let camX = camera.x;
@@ -1030,7 +1031,7 @@ export const renderGame = (
     });
     ctx.restore();
 
-    if (glitchIntensity > 0) {
+    if (glitchIntensity > 0 && !postFxActive) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = 'screen';
@@ -1044,7 +1045,7 @@ export const renderGame = (
         ctx.restore();
     }
 
-    if (isFrozen) {
+    if (isFrozen && !postFxActive) {
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
