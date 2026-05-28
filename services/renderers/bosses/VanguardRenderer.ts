@@ -1,6 +1,7 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
+import { neonStroke, neonPoly } from '../neonRender';
 
 export const drawVanguard = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     // Rotation
@@ -82,51 +83,36 @@ export const drawVanguard = (ctx: CanvasRenderingContext2D, e: Enemy, frame: num
 
     // Draw Edges (Shell)
     edges.forEach(edge => {
-        ctx.beginPath();
-        ctx.moveTo(edge.p1.x, edge.p1.y);
-        ctx.lineTo(edge.p2.x, edge.p2.y);
-        
         if (edge.depth < 0) {
-            ctx.strokeStyle = '#FF4500'; 
-            ctx.lineWidth = 3;
             ctx.globalAlpha = 1.0;
-            ctx.shadowColor = '#FF4500';
-            ctx.shadowBlur = 10;
+            neonStroke(ctx, (c) => {
+                c.moveTo(edge.p1.x, edge.p1.y);
+                c.lineTo(edge.p2.x, edge.p2.y);
+            }, '#FF4500', { width: 3 });
         } else {
-            ctx.strokeStyle = '#8B0000'; 
-            ctx.lineWidth = 1.5;
             ctx.globalAlpha = 0.4;
-            ctx.shadowBlur = 0;
+            neonStroke(ctx, (c) => {
+                c.moveTo(edge.p1.x, edge.p1.y);
+                c.lineTo(edge.p2.x, edge.p2.y);
+            }, '#8B0000', { width: 1.5, glow: false, core: false });
         }
-        ctx.stroke();
     });
-    
+
     ctx.globalAlpha = 1.0;
-    ctx.shadowBlur = 0;
 
     // Draw Vertices (Shell Nodes)
     projected.forEach(p => {
         if (!p) return;
         const isFront = p.depth < 0;
         const size = (isFront ? 5 : 3) * p.scale;
-        
-        ctx.fillStyle = '#FFFFFF';
+
         ctx.globalAlpha = isFront ? 1.0 : 0.5;
-        
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y - size);
-        ctx.lineTo(p.x + size, p.y);
-        ctx.lineTo(p.x, p.y + size);
-        ctx.lineTo(p.x - size, p.y);
-        ctx.closePath();
-        ctx.fill();
-        
-        if (isFront) {
-            ctx.shadowColor = '#FFFFFF';
-            ctx.shadowBlur = 5;
-            ctx.stroke(); 
-            ctx.shadowBlur = 0;
-        }
+        neonPoly(ctx, [
+            { x: p.x, y: p.y - size },
+            { x: p.x + size, y: p.y },
+            { x: p.x, y: p.y + size },
+            { x: p.x - size, y: p.y },
+        ], '#FFFFFF', { brightness: isFront ? 1 : 0.4, width: 1, glow: isFront, core: isFront });
     });
     ctx.globalAlpha = 1.0;
 
@@ -156,31 +142,23 @@ export const drawVanguard = (ctx: CanvasRenderingContext2D, e: Enemy, frame: num
     
     // Core pulsating color
     const redIntensity = 150 + (phase * 35);
-    ctx.strokeStyle = `rgb(255, ${255 - redIntensity}, 0)`; 
-    ctx.lineWidth = 1 + (phase * 0.5);
-    
-    if (phase === 3) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#FF0000';
-    }
+    const coreColor = `rgb(255, ${255 - redIntensity}, 0)`;
 
-    ctx.beginPath();
-    
+    const coreSegs: (readonly [{x:number,y:number}, {x:number,y:number}])[] = [];
     for (let i = 0; i < projCore.length; i++) {
         for (let j = i + 1; j < projCore.length; j++) {
             const dx = coreVerts[i].x - coreVerts[j].x;
             const dy = coreVerts[i].y - coreVerts[j].y;
             const dz = coreVerts[i].z - coreVerts[j].z;
             const d2 = dx*dx + dy*dy + dz*dz;
-            
+
             if (d2 <= 4.1) {
-                const p1 = projCore[i];
-                const p2 = projCore[j];
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
+                coreSegs.push([projCore[i], projCore[j]]);
             }
         }
     }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+
+    neonStroke(ctx, (c) => {
+        coreSegs.forEach(([p1, p2]) => { c.moveTo(p1.x, p1.y); c.lineTo(p2.x, p2.y); });
+    }, coreColor, { width: 1 + (phase * 0.5), glow: phase === 3, core: phase === 3 });
 };

@@ -2,6 +2,7 @@
 import { Projectile, Player } from '../../types';
 import { COLORS } from '../../constants';
 import { project3D, hexToRgba, projectSimple, parseColorToRgb } from '../renderUtils';
+import { neonStroke, neonPoly, neonOrb } from './neonRender';
 
 const getQuadBezierPoint = (t: number, p0: { x: number, y: number }, p1: { x: number, y: number }, p2: { x: number, y: number }) => {
     const invT = 1 - t;
@@ -38,14 +39,12 @@ export const drawProjectiles = (
         const drawElectricSegment = (pStart: { x: number, y: number }, pEnd: { x: number, y: number }, pControl: { x: number, y: number } | null, alpha: number) => {
             if (alpha <= 0.05) return;
             const coreColor = `rgba(255, 0, 255, ${alpha})`;
-            const glowColor = `rgba(208, 0, 255, ${alpha})`;
 
             const dist = Math.sqrt((pEnd.x - pStart.x) ** 2 + (pEnd.y - pStart.y) ** 2);
             const steps = Math.max(2, Math.ceil(dist / 10));
 
-            ctx.beginPath();
-            ctx.moveTo(pStart.x, pStart.y);
-
+            // Pre-compute jittered points ONCE (neonStroke re-runs the trace).
+            const pts: { x: number, y: number }[] = [{ x: pStart.x, y: pStart.y }];
             for (let i = 1; i <= steps; i++) {
                 const t = i / steps;
                 let pt;
@@ -58,10 +57,13 @@ export const drawProjectiles = (
                     jx += (Math.random() - 0.5) * jitterAmount;
                     jy += (Math.random() - 0.5) * jitterAmount;
                 }
-                ctx.lineTo(jx, jy);
+                pts.push({ x: jx, y: jy });
             }
 
-            ctx.shadowBlur = 10 * alpha; ctx.shadowColor = glowColor; ctx.strokeStyle = coreColor; ctx.lineWidth = 1.5 * alpha; ctx.stroke(); ctx.shadowBlur = 0;
+            neonStroke(ctx, (c) => {
+                c.moveTo(pts[0].x, pts[0].y);
+                for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+            }, coreColor, { width: 1.5 * alpha, intensity: alpha, glow: false, core: false });
         };
 
         for (let i = 0; i < wakeNodes.length; i++) {
@@ -228,13 +230,10 @@ export const drawProjectiles = (
             ctx.translate(p.pos.x, p.pos.y);
             const angle = Math.atan2(p.velocity.y, p.velocity.x);
             ctx.rotate(angle);
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-20, 0);
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = kd.generation === 0 ? 3 : 1.5;
-            ctx.shadowColor = p.color; ctx.shadowBlur = 10; ctx.stroke();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath(); ctx.arc(0, 0, kd.generation === 0 ? 3 : 1.5, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0; ctx.restore();
+            const kw = kd.generation === 0 ? 3 : 1.5;
+            neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(-20, 0); }, p.color, { width: kw });
+            neonOrb(ctx, 0, 0, kw, '#FFFFFF');
+            ctx.restore();
             return;
         }
 
@@ -246,16 +245,15 @@ export const drawProjectiles = (
             const isRewind = p.paradoxData.state === 'REWIND';
             const color = isRewind ? '#FFFFFF' : p.color;
             const alpha = isRewind ? 0.6 : 1.0;
-            ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = 3; ctx.shadowColor = color; ctx.shadowBlur = 10; ctx.lineCap = 'round';
-            ctx.beginPath(); ctx.moveTo(0, 0);
+            ctx.globalAlpha = alpha; ctx.lineCap = 'round';
             const dx = p.pos.x - player.pos.x; const dy = p.pos.y - player.pos.y;
-            ctx.lineTo(dx, dy); ctx.stroke();
-            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(dx, dy, p.radius, 0, Math.PI * 2); ctx.fill();
+            neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(dx, dy); }, color, { width: 3 });
+            neonOrb(ctx, dx, dy, p.radius, color);
             const currentAngle = Math.atan2(dy, dx);
             const swingDir = p.paradoxData.swingDir || 1;
             const isClockwiseMovement = (p.paradoxData.state === 'FORWARD' && swingDir === 1) || (p.paradoxData.state === 'REWIND' && swingDir === -1);
             const currentDist = Math.sqrt(dx * dx + dy * dy);
-            ctx.lineWidth = 1; ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.3;
             ctx.beginPath();
             const trailLen = 0.5;
             const startA = currentAngle;
@@ -276,7 +274,7 @@ export const drawProjectiles = (
                 grad.addColorStop(0, 'rgba(100, 0, 200, 0)'); grad.addColorStop(0.5, 'rgba(180, 0, 255, 0.5)'); grad.addColorStop(1, 'rgba(100, 0, 200, 0)');
                 ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(0, 0, p.radius * (2 + i * 0.5), p.radius * (0.5 + i * 0.2), i * 0.5, 0, Math.PI * 2); ctx.fill();
             }
-            ctx.strokeStyle = '#FFFFFF'; ctx.shadowColor = '#AA00FF'; ctx.shadowBlur = 10; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
+            neonStroke(ctx, (c) => { c.arc(0, 0, p.radius, 0, Math.PI * 2); }, '#FFFFFF', { width: 1 }); ctx.restore();
             return;
         }
 
@@ -330,61 +328,34 @@ export const drawProjectiles = (
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
 
-            // Draw Wireframe Housing
-            ctx.strokeStyle = housingColor;
-            ctx.lineWidth = 1;
-
-            // Connect Front to Back
+            // Draw Wireframe Housing (Connect Front to Back)
             for (let i = 0; i < segments; i++) {
-                ctx.beginPath();
-                ctx.moveTo(projFront[i].x, projFront[i].y);
-                ctx.lineTo(projBack[i].x, projBack[i].y);
-                ctx.stroke();
+                neonStroke(ctx, (c) => {
+                    c.moveTo(projFront[i].x, projFront[i].y);
+                    c.lineTo(projBack[i].x, projBack[i].y);
+                }, housingColor, { width: 1, glow: false, core: false });
             }
 
             // Draw Back Rim
-            ctx.beginPath();
-            projBack.forEach((pt, i) => {
-                if (i === 0) ctx.moveTo(pt.x, pt.y);
-                else ctx.lineTo(pt.x, pt.y);
-            });
-            ctx.closePath();
-            ctx.stroke();
+            neonStroke(ctx, (c) => {
+                projBack.forEach((pt, i) => { if (i === 0) c.moveTo(pt.x, pt.y); else c.lineTo(pt.x, pt.y); });
+                c.closePath();
+            }, housingColor, { width: 1, glow: false, core: false });
 
-            // Draw Cone (Front Rim -> Center)
-            // Fill this one to make it look solid
-            ctx.fillStyle = hexToRgba(p.color, 0.1);
-            ctx.strokeStyle = rimColor;
-            ctx.lineWidth = 2;
-
-            ctx.beginPath();
-            projFront.forEach((pt, i) => {
-                if (i === 0) ctx.moveTo(pt.x, pt.y);
-                else ctx.lineTo(pt.x, pt.y);
-            });
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            // Draw Cone (Front Rim -> Center) glassy fill + neon outline
+            neonPoly(ctx, projFront, rimColor, { fillAlpha: 0.1, width: 2 });
 
             // Draw "Speaker" Cone lines (Front Rim -> Small pulsing center)
-            ctx.strokeStyle = hexToRgba(p.color, 0.6);
-            ctx.lineWidth = 1.5;
+            const coneLineColor = hexToRgba(p.color, 0.6);
             for (let i = 0; i < segments; i++) {
-                ctx.beginPath();
-                ctx.moveTo(projFront[i].x, projFront[i].y);
-                ctx.lineTo(projCone[i].x, projCone[i].y);
-                ctx.stroke();
+                neonStroke(ctx, (c) => {
+                    c.moveTo(projFront[i].x, projFront[i].y);
+                    c.lineTo(projCone[i].x, projCone[i].y);
+                }, coneLineColor, { width: 1.5, glow: false, core: false });
             }
 
             // Draw Dust Cap (The glowing center)
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            projCone.forEach((pt, i) => {
-                if (i === 0) ctx.moveTo(pt.x, pt.y);
-                else ctx.lineTo(pt.x, pt.y);
-            });
-            ctx.closePath();
-            ctx.fill();
+            neonPoly(ctx, projCone, '#fff', { fillAlpha: 0.9 });
 
             // Sound Wave Ring (2D effect around the 3D object for clarity)
             if (frame % 45 < 20) {
@@ -393,15 +364,10 @@ export const drawProjectiles = (
                 const wavePts = getCirclePoints(radius * (1.2 + waveExp), 0);
                 const projWave = wavePts.map(v => project3D(v.x, v.y, v.z, rotX, rotY, 0, 200));
 
-                ctx.beginPath();
-                projWave.forEach((pt, i) => {
-                    if (i === 0) ctx.moveTo(pt.x, pt.y);
-                    else ctx.lineTo(pt.x, pt.y);
-                });
-                ctx.closePath();
-                ctx.strokeStyle = hexToRgba(p.color, 1 - waveExp);
-                ctx.lineWidth = 1;
-                ctx.stroke();
+                neonStroke(ctx, (c) => {
+                    projWave.forEach((pt, i) => { if (i === 0) c.moveTo(pt.x, pt.y); else c.lineTo(pt.x, pt.y); });
+                    c.closePath();
+                }, hexToRgba(p.color, 1 - waveExp), { width: 1, glow: false, core: false });
             }
 
             ctx.restore();
@@ -416,44 +382,38 @@ export const drawProjectiles = (
                 const t = frame * 0.8; const len = p.radius * 1.75; const width = p.radius * 1.8;
                 const grad = ctx.createLinearGradient(-len, 0, len, 0); grad.addColorStop(0, '#440088'); grad.addColorStop(0.5, '#8800FF'); grad.addColorStop(1, '#EEBBFF');
                 ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(-len * 0.6, -width / 2); ctx.lineTo(len, 0); ctx.lineTo(-len * 0.6, width / 2); ctx.closePath(); ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath();
-                const threads = 2;
-                for (let i = 0; i < threads; i++) {
-                    const offset = i * Math.PI; let first = true;
-                    for (let x = -len * 0.6; x <= len; x += 2) {
-                        const n = (x + len * 0.6) / (len * 1.6); const r = (1 - n) * (width / 2); const phase = (x * 0.15) - t + offset; const y = Math.sin(phase) * r;
-                        if (Math.cos(phase) > 0) { if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y); } else { first = true; }
+                ctx.lineCap = 'round';
+                neonStroke(ctx, (c) => {
+                    const threads = 2;
+                    for (let i = 0; i < threads; i++) {
+                        const offset = i * Math.PI; let first = true;
+                        for (let x = -len * 0.6; x <= len; x += 2) {
+                            const n = (x + len * 0.6) / (len * 1.6); const r = (1 - n) * (width / 2); const phase = (x * 0.15) - t + offset; const y = Math.sin(phase) * r;
+                            if (Math.cos(phase) > 0) { if (first) { c.moveTo(x, y); first = false; } else c.lineTo(x, y); } else { first = true; }
+                        }
                     }
-                }
-                ctx.stroke();
-                ctx.fillStyle = '#AA00FF'; ctx.shadowColor = '#AA00FF'; ctx.shadowBlur = 15; ctx.beginPath(); ctx.ellipse(-len * 0.6, 0, width / 3, width / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+                }, 'rgba(255, 255, 255, 0.8)', { width: 2 });
+                ctx.fillStyle = '#AA00FF'; ctx.beginPath(); ctx.ellipse(-len * 0.6, 0, width / 3, width / 2, 0, 0, Math.PI * 2); ctx.fill();
             } else {
                 // Base Spirit Lance: Energy Shard
                 const length = p.radius * 3.0;
                 const width = p.radius * 0.8;
 
                 // Core
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.moveTo(length / 2, 0);
-                ctx.lineTo(-length / 2, -width / 2);
-                ctx.lineTo(-length / 2 + width, 0);
-                ctx.lineTo(-length / 2, width / 2);
-                ctx.closePath();
-                ctx.fill();
+                neonPoly(ctx, [
+                    { x: length / 2, y: 0 },
+                    { x: -length / 2, y: -width / 2 },
+                    { x: -length / 2 + width, y: 0 },
+                    { x: -length / 2, y: width / 2 },
+                ], p.color, { fillAlpha: 0.9 });
 
                 // Trailing particles/line
-                ctx.strokeStyle = `rgba(255, 255, 255, 0.5)`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(-length, 0);
-                ctx.lineTo(length / 2, 0);
-                ctx.stroke();
+                neonStroke(ctx, (c) => { c.moveTo(-length, 0); c.lineTo(length / 2, 0); }, `rgba(255, 255, 255, 0.5)`, { width: 1, glow: false, core: false });
             }
             ctx.restore();
         } else if (p.sourceWeaponId === 'drum_laser') {
             ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.rotate(Math.atan2(p.velocity.y, p.velocity.x));
-            ctx.fillStyle = '#FFFFFF'; ctx.shadowBlur = 10; ctx.shadowColor = '#FFD700'; ctx.beginPath(); ctx.ellipse(0, 0, 15, 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
+            ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.ellipse(0, 0, 15, 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
         } else if (p.sourceWeaponId === 'nanite_swarm') {
             ctx.save(); ctx.translate(p.pos.x, p.pos.y);
             const idNum = p.id.charCodeAt(0) + p.id.charCodeAt(p.id.length - 1);
@@ -464,31 +424,41 @@ export const drawProjectiles = (
             const h = scale * 1.5; const r = scale;
             const verts = [{ x: 0, y: -h, z: 0 }, { x: r, y: h * 0.5, z: r * 0.8 }, { x: -r, y: h * 0.5, z: r * 0.8 }, { x: 0, y: h * 0.5, z: -r }];
             const projected = verts.map(v => project3D(v.x, v.y, v.z, rotX, rotY, 0, 200));
-            ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.lineJoin = 'round';
-            ctx.beginPath(); ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[1].x, projected[1].y); ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[2].x, projected[2].y);
-            ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[3].x, projected[3].y); ctx.moveTo(projected[1].x, projected[1].y); ctx.lineTo(projected[2].x, projected[2].y);
-            ctx.lineTo(projected[3].x, projected[3].y); ctx.lineTo(projected[1].x, projected[1].y); ctx.stroke();
-            ctx.fillStyle = glitchTrigger ? 'rgba(255, 255, 255, 0.8)' : hexToRgba(color, 0.3); ctx.fill(); ctx.restore();
+            const naniteTrace = (c: CanvasRenderingContext2D) => {
+                c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[1].x, projected[1].y); c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[2].x, projected[2].y);
+                c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[3].x, projected[3].y); c.moveTo(projected[1].x, projected[1].y); c.lineTo(projected[2].x, projected[2].y);
+                c.lineTo(projected[3].x, projected[3].y); c.lineTo(projected[1].x, projected[1].y);
+            };
+            ctx.lineJoin = 'round';
+            ctx.fillStyle = glitchTrigger ? 'rgba(255, 255, 255, 0.8)' : hexToRgba(color, 0.3);
+            ctx.beginPath(); naniteTrace(ctx); ctx.fill();
+            neonStroke(ctx, naniteTrace, color, { width: 1, glow: false, core: false });
+            ctx.restore();
         } else if (p.beamData) {
             // ... (Beam logic kept as is)
             ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.rotate(p.beamData.angle);
             if (p.id.startsWith('utatu_link')) {
                 const len = p.beamData.length;
-                ctx.shadowBlur = 8; ctx.shadowColor = '#bf00ff'; ctx.strokeStyle = '#9900FF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0);
                 const segs = Math.max(2, Math.floor(len / 15));
-                for (let i = 1; i < segs; i++) { const x = (i / segs) * len; const y = (Math.random() - 0.5) * 8; ctx.lineTo(x, y); }
-                ctx.lineTo(len, 0); ctx.stroke();
-                ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1; ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len, 0); ctx.stroke();
+                // Pre-compute jitter ONCE (neonStroke re-runs the trace).
+                const utatuPts: { x: number, y: number }[] = [{ x: 0, y: 0 }];
+                for (let i = 1; i < segs; i++) { const x = (i / segs) * len; const y = (Math.random() - 0.5) * 8; utatuPts.push({ x, y }); }
+                utatuPts.push({ x: len, y: 0 });
+                neonStroke(ctx, (c) => { c.moveTo(utatuPts[0].x, utatuPts[0].y); for (let i = 1; i < utatuPts.length; i++) c.lineTo(utatuPts[i].x, utatuPts[i].y); }, '#9900FF', { width: 2 });
+                neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(len, 0); }, '#FFFFFF', { width: 1, glow: false, core: false });
             } else if (p.id.includes('shango_beam')) {
                 const len = p.beamData.length; const segLen = 20; const segs = Math.ceil(len / segLen);
-                ctx.shadowBlur = 15; ctx.shadowColor = '#FF8800'; ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                ctx.beginPath(); ctx.moveTo(0, 0); for (let i = 1; i <= segs; i++) { const x = i * segLen; const y = (Math.random() - 0.5) * 15; ctx.lineTo(x, y); } ctx.stroke();
-                ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(0, 0); for (let i = 1; i <= segs; i++) { const x = i * segLen; const y = (Math.random() - 0.5) * 8; ctx.lineTo(x, y); } ctx.stroke();
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                // Pre-compute both jagged jitter arrays ONCE.
+                const shangoCore: { x: number, y: number }[] = [{ x: 0, y: 0 }];
+                for (let i = 1; i <= segs; i++) { const x = i * segLen; const y = (Math.random() - 0.5) * 15; shangoCore.push({ x, y }); }
+                const shangoInner: { x: number, y: number }[] = [{ x: 0, y: 0 }];
+                for (let i = 1; i <= segs; i++) { const x = i * segLen; const y = (Math.random() - 0.5) * 8; shangoInner.push({ x, y }); }
+                neonStroke(ctx, (c) => { c.moveTo(shangoCore[0].x, shangoCore[0].y); for (let i = 1; i < shangoCore.length; i++) c.lineTo(shangoCore[i].x, shangoCore[i].y); }, '#FFD700', { width: 4 });
+                neonStroke(ctx, (c) => { c.moveTo(shangoInner[0].x, shangoInner[0].y); for (let i = 1; i < shangoInner.length; i++) c.lineTo(shangoInner[i].x, shangoInner[i].y); }, '#FFFFFF', { width: 1.5, glow: false, core: false });
             } else if (p.id.startsWith('lotus')) {
-                ctx.strokeStyle = '#ff0055'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#ff0055';
-                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(p.beamData.length, 0); ctx.stroke();
-                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
-                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(p.beamData.length, 0); ctx.stroke(); ctx.shadowBlur = 0;
+                neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(p.beamData!.length, 0); }, '#ff0055', { width: 2 });
+                neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(p.beamData!.length, 0); }, '#ffffff', { width: 1, glow: false, core: false });
             } else {
                 ctx.fillStyle = p.color; ctx.fillRect(0, -p.beamData.width / 2, p.beamData.length, p.beamData.width);
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0, -p.beamData.width / 4, p.beamData.length, p.beamData.width / 2);
@@ -519,23 +489,22 @@ export const drawProjectiles = (
 
             const projected = verts.map(v => project3D(v.x, v.y, v.z, rotX, rotY, 0, 200));
 
-            // Use projectile color for varied enemy projectiles
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = 1.5;
+            const enemyTrace = (c: CanvasRenderingContext2D) => {
+                c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[1].x, projected[1].y);
+                c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[2].x, projected[2].y);
+                c.moveTo(projected[0].x, projected[0].y); c.lineTo(projected[3].x, projected[3].y);
+                c.moveTo(projected[1].x, projected[1].y); c.lineTo(projected[2].x, projected[2].y);
+                c.lineTo(projected[3].x, projected[3].y); c.lineTo(projected[1].x, projected[1].y);
+            };
             ctx.lineJoin = 'round';
-
-            ctx.beginPath();
-            ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[1].x, projected[1].y);
-            ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[2].x, projected[2].y);
-            ctx.moveTo(projected[0].x, projected[0].y); ctx.lineTo(projected[3].x, projected[3].y);
-            ctx.moveTo(projected[1].x, projected[1].y); ctx.lineTo(projected[2].x, projected[2].y);
-            ctx.lineTo(projected[3].x, projected[3].y); ctx.lineTo(projected[1].x, projected[1].y);
-            ctx.stroke();
 
             const rgb = parseColorToRgb(p.color);
             if (rgb) ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`;
             else ctx.fillStyle = p.color;
-            ctx.fill();
+            ctx.beginPath(); enemyTrace(ctx); ctx.fill();
+
+            // Single cheap neon pass (projectiles are numerous).
+            neonStroke(ctx, enemyTrace, p.color, { width: 1.5, glow: false, core: false });
 
             ctx.restore();
         } else if (p.sourceWeaponId === 'cyber_kora') {
@@ -548,7 +517,7 @@ export const drawProjectiles = (
                 const barCount = 3;
                 const w = p.radius * 1.5;
                 const baseH = p.radius * 3;
-                ctx.shadowColor = '#00FFFF'; ctx.shadowBlur = 15; ctx.fillStyle = '#00FFFF';
+                ctx.fillStyle = '#00FFFF';
                 for (let i = 0; i < barCount; i++) {
                     const offset = (i - 1) * (w * 0.8);
                     const h = baseH * (0.5 + Math.abs(Math.sin(frame * 0.2 + i + p.id.charCodeAt(0))));
@@ -563,25 +532,23 @@ export const drawProjectiles = (
 
                 if (isShredder) {
                     // DISSONANCE SHREDDER: Red Glitchy Wave
-                    ctx.strokeStyle = '#FF0033'; ctx.shadowColor = '#FF0000'; ctx.shadowBlur = 10; ctx.lineWidth = 3;
-                    ctx.beginPath();
                     const segments = 6; const len = p.radius * 2;
-                    ctx.moveTo(0, -len);
+                    // Pre-compute jittered wave points ONCE (neonStroke re-runs the trace).
+                    const shredPts: { x: number, y: number }[] = [{ x: 0, y: -len }];
                     for (let i = 0; i <= segments; i++) {
                         const y = -len + (i / segments) * len * 2;
                         const x = (i % 2 === 0 ? 5 : -5) + (Math.random() - 0.5) * 10;
-                        ctx.lineTo(x, y);
+                        shredPts.push({ x, y });
                     }
-                    ctx.stroke();
+                    neonStroke(ctx, (c) => { c.moveTo(shredPts[0].x, shredPts[0].y); for (let i = 1; i < shredPts.length; i++) c.lineTo(shredPts[i].x, shredPts[i].y); }, '#FF0033', { width: 3 });
                     if (Math.random() < 0.3) {
                         ctx.fillStyle = '#FFFFFF'; ctx.fillRect((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, 10, 2);
                     }
                 } else {
                     // STANDARD / BARRIER TRAVEL: Smooth Wave
                     const size = p.radius * 3.0;
-                    const alpha = 1.0;
-                    ctx.beginPath(); ctx.strokeStyle = p.color; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.shadowBlur = 10; ctx.shadowColor = p.color;
-                    ctx.moveTo(-5, -size * 0.5); ctx.quadraticCurveTo(10, 0, -5, size * 0.5); ctx.stroke();
+                    ctx.lineCap = 'round';
+                    neonStroke(ctx, (c) => { c.moveTo(-5, -size * 0.5); c.quadraticCurveTo(10, 0, -5, size * 0.5); }, p.color, { width: 3 });
                 }
                 ctx.restore();
             }
@@ -593,15 +560,14 @@ export const drawProjectiles = (
                 ctx.save(); ctx.translate(p.pos.x, p.pos.y);
                 const alpha = Math.min(1, p.duration / 15);
                 const rgb = parseColorToRgb(p.color) || (isBassDrop ? { r: 255, g: 68, b: 0 } : { r: 153, g: 0, b: 255 });
-                ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.lineWidth = 4;
-                ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`; ctx.shadowColor = p.color; ctx.shadowBlur = 20; ctx.stroke();
-                ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.2})`; ctx.fill();
-                ctx.beginPath(); ctx.arc(0, 0, p.radius * 0.7, 0, Math.PI * 2); ctx.lineWidth = 2;
-                ctx.strokeStyle = `rgba(${Math.min(255, rgb.r + 60)}, ${Math.min(255, rgb.g + 60)}, ${Math.min(255, rgb.b + 60)}, ${alpha * 0.8})`; ctx.stroke();
+                ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.2})`;
+                ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.fill();
+                neonStroke(ctx, (c) => { c.arc(0, 0, p.radius, 0, Math.PI * 2); }, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`, { width: 4 });
+                neonStroke(ctx, (c) => { c.arc(0, 0, p.radius * 0.7, 0, Math.PI * 2); }, `rgba(${Math.min(255, rgb.r + 60)}, ${Math.min(255, rgb.g + 60)}, ${Math.min(255, rgb.b + 60)}, ${alpha * 0.8})`, { width: 2 });
                 ctx.restore();
             } else {
                 ctx.save();
-                ctx.strokeStyle = p.color; ctx.lineWidth = p.sourceWeaponId === 'bass_mine_explosion' ? 4 : (p.sourceWeaponId?.includes('boss') || p.sourceWeaponId === 'logic_bomb_explosion' ? 8 : 3);
+                const ringWidth = p.sourceWeaponId === 'bass_mine_explosion' ? 4 : (p.sourceWeaponId?.includes('boss') || p.sourceWeaponId === 'logic_bomb_explosion' ? 8 : 3);
                 const segs = (p.sourceWeaponId === 'bass_mine_explosion' || p.sourceWeaponId?.includes('boss') || p.sourceWeaponId === 'logic_bomb_explosion') ? 32 : 8;
                 const numRings = p.sourceWeaponId === 'bass_mine_explosion' ? 1 : 3;
                 if (p.sourceWeaponId === 'boss_death_core' || p.sourceWeaponId === 'logic_bomb_explosion') {
@@ -610,38 +576,42 @@ export const drawProjectiles = (
                 } else {
                     for (let ring = 0; ring < numRings; ring++) {
                         const r = p.radius - (ring * (p.sourceWeaponId?.includes('boss') ? 50 : 30)); if (r < 0) continue;
-                        ctx.beginPath(); for (let i = 0; i <= segs; i++) { const a = (i / segs) * Math.PI * 2; const x = p.pos.x + Math.cos(a) * r, y = p.pos.y + Math.sin(a) * r; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.stroke();
+                        neonStroke(ctx, (c) => { for (let i = 0; i <= segs; i++) { const a = (i / segs) * Math.PI * 2; const x = p.pos.x + Math.cos(a) * r, y = p.pos.y + Math.sin(a) * r; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } }, p.color, { width: ringWidth, glow: false, core: false });
                     }
                 }
                 ctx.restore();
             }
         } else if (p.boomerangData) {
-            ctx.save(); ctx.translate(p.pos.x, p.pos.y); const spin = frame * 0.5; ctx.rotate(spin); ctx.strokeStyle = p.color; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(-p.radius, 0); ctx.lineTo(p.radius, 0); ctx.moveTo(0, -p.radius); ctx.lineTo(0, p.radius); ctx.stroke(); ctx.restore();
+            ctx.save(); ctx.translate(p.pos.x, p.pos.y); const spin = frame * 0.5; ctx.rotate(spin);
+            neonStroke(ctx, (c) => {
+                c.arc(0, 0, p.radius, 0, Math.PI * 2);
+                c.moveTo(-p.radius, 0); c.lineTo(p.radius, 0); c.moveTo(0, -p.radius); c.lineTo(0, p.radius);
+            }, p.color, { width: 3 });
+            ctx.restore();
         } else if (p.skyFallData) {
             if (p.skyFallData.isPool) {
                 ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.fillStyle = p.color; ctx.globalAlpha = 0.4 + Math.sin(frame * 0.2) * 0.1;
                 ctx.beginPath(); ctx.arc(0, 0, p.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = '#fff'; for (let i = 0; i < 3; i++) { const nx = (Math.random() - 0.5) * p.radius; const ny = (Math.random() - 0.5) * p.radius; ctx.fillRect(nx, ny, 2, 2); } ctx.globalAlpha = 1.0; ctx.restore();
             } else if (!p.skyFallData.hasHit) {
-                ctx.save(); ctx.strokeStyle = p.color; ctx.lineWidth = p.radius; ctx.globalAlpha = 0.8; const tailLen = 100;
-                ctx.beginPath(); ctx.moveTo(p.pos.x, p.pos.y); ctx.lineTo(p.pos.x, p.pos.y - tailLen); ctx.stroke();
+                ctx.save(); ctx.globalAlpha = 0.8; const tailLen = 100;
+                neonStroke(ctx, (c) => { c.moveTo(p.pos.x, p.pos.y); c.lineTo(p.pos.x, p.pos.y - tailLen); }, p.color, { width: p.radius, glow: false, core: false });
                 ctx.fillStyle = '#fff'; ctx.fillRect(p.pos.x - p.radius / 2, p.pos.y, p.radius, 10); ctx.restore();
             }
         } else if (p.type === 'CHAIN' as any) {
             ctx.save();
-            ctx.strokeStyle = p.color; ctx.lineWidth = 2; const tailLen = 30; const angle = Math.atan2(p.velocity.y, p.velocity.x);
+            const tailLen = 30; const angle = Math.atan2(p.velocity.y, p.velocity.x);
             const startX = p.pos.x - Math.cos(angle) * tailLen; const startY = p.pos.y - Math.sin(angle) * tailLen;
-            ctx.beginPath(); ctx.moveTo(startX, startY); const midX = (startX + p.pos.x) / 2 + (Math.random() - 0.5) * 10; const midY = (startY + p.pos.y) / 2 + (Math.random() - 0.5) * 10;
-            ctx.lineTo(midX, midY); ctx.lineTo(p.pos.x, p.pos.y); ctx.stroke();
+            // Pre-compute jittered mid-point ONCE (neonStroke re-runs the trace).
+            const midX = (startX + p.pos.x) / 2 + (Math.random() - 0.5) * 10; const midY = (startY + p.pos.y) / 2 + (Math.random() - 0.5) * 10;
+            neonStroke(ctx, (c) => { c.moveTo(startX, startY); c.lineTo(midX, midY); c.lineTo(p.pos.x, p.pos.y); }, p.color, { width: 2, glow: false, core: false });
             ctx.restore();
         } else if (p.mineData?.isMine) {
             const size = p.radius; const pulse = 1 + Math.sin(frame * 0.2) * 0.1;
             ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.scale(pulse, pulse);
             ctx.fillStyle = '#111'; ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.fillRect(-size, -size, size * 2, size * 2); ctx.strokeRect(-size, -size, size * 2, size * 2);
             ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#ff6600'; ctx.beginPath(); ctx.arc(0, 0, size * 0.4 * pulse, 0, Math.PI * 2); ctx.fill();
+            neonOrb(ctx, 0, 0, size * 0.4 * pulse, '#ff6600');
             if (p.mineData.pullRadius > 0) { ctx.strokeStyle = 'rgba(255, 102, 0, 0.2)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, p.mineData.pullRadius, 0, Math.PI * 2); ctx.stroke(); }
             ctx.restore();
         } else {

@@ -1,6 +1,7 @@
 
 import { Obstacle } from '../../types';
 import { project3D, parseColorToRgb } from '../renderUtils';
+import { neonStroke, neonPoly } from './neonRender';
 
 export const drawObstacle = (ctx: CanvasRenderingContext2D, obs: Obstacle, frame: number, gridColor: string) => {
     // 3D Tower Rendering
@@ -47,55 +48,26 @@ export const drawObstacle = (ctx: CanvasRenderingContext2D, obs: Obstacle, frame
     // Simple painter's algo: draw back faces first?
     // Actually, cylinder/convex shape: simple sorting by Z might work, or just draw all sides with transparency
 
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-
     // Parse grid color for dynamic tinting
     const rgb = parseColorToRgb(gridColor) || { r: 0, g: 255, b: 255 };
+    const gridRgb = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
 
-    // Draw Sides
+    // Draw Sides as glassy neon panels.
     for (let i = 0; i < sides; i++) {
         const next = (i + 1) % sides;
-
         const p1 = pTop[i];
         const p2 = pTop[next];
         const p3 = pBot[next];
         const p4 = pBot[i];
 
-        // Color based on height/index for "digital rain" effect
-        const alpha = 0.1 + Math.abs(Math.sin(i + frame * 0.05)) * 0.1;
-
-        // Use biome grid color for fill/stroke
-        ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-        ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
-
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.lineTo(p3.x, p3.y);
-        ctx.lineTo(p4.x, p4.y);
-        ctx.closePath();
-
-        ctx.fill();
-        ctx.stroke();
+        // "Digital rain" flicker on the glass fill.
+        const alpha = 0.08 + Math.abs(Math.sin(i + frame * 0.05)) * 0.1;
+        neonPoly(ctx, [p1, p2, p3, p4], gridRgb, { width: 1, fillAlpha: alpha, intensity: 0.55, glow: false, core: false });
     }
 
-    // Draw Top Cap
-    ctx.beginPath();
-    ctx.moveTo(pTop[0].x, pTop[0].y);
-    for (let i = 1; i < sides; i++) ctx.lineTo(pTop[i].x, pTop[i].y);
-    ctx.closePath();
+    // Draw Top Cap (brightest — it's nearest the camera).
+    neonPoly(ctx, pTop, gridRgb, { width: 1.5, fillAlpha: 0.18, intensity: 1.0 });
 
-    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`;
-    ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`;
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw Base (Shadow/Ground connection)
-    ctx.beginPath();
-    ctx.moveTo(pBot[0].x, pBot[0].y);
-    for (let i = 1; i < sides; i++) ctx.lineTo(pBot[i].x, pBot[i].y);
-    ctx.closePath();
-    ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`;
-    ctx.stroke();
+    // Draw Base ring.
+    neonStroke(ctx, (c) => { c.moveTo(pBot[0].x, pBot[0].y); for (let i = 1; i < sides; i++) c.lineTo(pBot[i].x, pBot[i].y); c.closePath(); }, gridRgb, { width: 1, intensity: 0.6, glow: false, core: false });
 };

@@ -114,7 +114,7 @@ export class PostProcessor {
         gl.uniform1f(this.uniforms.uGlitch, u.glitch);
         gl.uniform1f(this.uniforms.uFreeze, u.freeze);
         gl.uniform1f(this.uniforms.uRedFlash, u.redFlash);
-        gl.uniform1f(this.uniforms.uBloom, 0.35);
+        gl.uniform1f(this.uniforms.uBloom, 0.5);
         const t = u.tint || [0.012, 0.0, 0.022];
         gl.uniform3f(this.uniforms.uTint, t[0], t[1], t[2]);
 
