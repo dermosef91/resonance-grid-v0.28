@@ -1,6 +1,6 @@
 
 import { Enemy, Player, Projectile, Pickup, TextParticle, EntityType, VisualParticle, MissionEntity, MissionType, ColorPalette, Vector2, Shockwave, EnemyType, Replica, Obstacle, MissionState } from '../types';
-import { COLORS, ZOOM_LEVEL, getUseSprites } from '../constants';
+import { COLORS, ZOOM_LEVEL } from '../constants';
 import { EnemyRenderRegistry } from './renderers';
 import { project3D, hexToRgba, parseColorToRgb, drawLightningBolt } from './renderUtils';
 import { drawBackground, drawLandscape, drawMegastructure, drawSierpinskiTetrahedron, LightSource, DistortionSource } from './renderers/backgroundRenderer';
@@ -11,7 +11,6 @@ import { drawAbyssalLoop } from './renderers/EffectRenderer';
 import { drawProjectiles } from './renderers/ProjectileRenderer';
 import { drawObstacle } from './renderers/ObstacleRenderer';
 import { getNeonQuality, setGlowPulse, beatPulse } from './renderers/neonRender';
-import { drawEntitySprite, enemySpriteId, pickupSpriteId } from './renderers/spriteRenderer';
 
 // --- Offscreen bloom buffer (cached across frames to avoid per-frame allocation) ---
 let bloomCanvas: HTMLCanvasElement | null = null;
@@ -77,12 +76,8 @@ export const drawEnemy = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
         ctx.scale(pulse, pulse);
     }
 
-    let drewSprite = false;
-    if (getUseSprites()) drewSprite = drawEntitySprite(ctx, enemySpriteId(e), e.radius, e.rotation || 0);
-    if (!drewSprite) {
-        const renderer = EnemyRenderRegistry[e.enemyType] || EnemyRenderRegistry['DEFAULT'];
-        renderer(ctx, e, frame);
-    }
+    const renderer = EnemyRenderRegistry[e.enemyType] || EnemyRenderRegistry['DEFAULT'];
+    renderer(ctx, e, frame);
 
     if (e.stunTimer > 0) {
         ctx.fillStyle = '#00FFFF'; ctx.font = '10px monospace'; ctx.fillText('⚡', -3, -e.radius - 5);
@@ -860,29 +855,11 @@ export const renderGame = (
     // 5. PLAYER
     renderQueue.push({
         y: player.pos.y,
-        draw: () => {
-            if (getUseSprites()) {
-                ctx.save();
-                ctx.translate(player.pos.x, player.pos.y);
-                const drew = drawEntitySprite(ctx, 'player', 22, player.rotation || 0);
-                ctx.restore();
-                if (drew) return; // NOTE: sprite mode skips weapon auras/diegetic bars (added in rollout)
-            }
-            drawPlayer(ctx, player, frame, activeMissionType);
-        }
+        draw: () => drawPlayer(ctx, player, frame, activeMissionType)
     });
 
     // Draw Pickups (Floor Layer, above zones but below tall objects)
-    pickups.forEach(p => {
-        if (getUseSprites()) {
-            ctx.save();
-            ctx.translate(p.pos.x, p.pos.y);
-            const drew = drawEntitySprite(ctx, pickupSpriteId(p), (p as any).radius || 10, 0);
-            ctx.restore();
-            if (drew) return;
-        }
-        drawPickup(ctx, p, frame, viewBounds);
-    });
+    pickups.forEach(p => drawPickup(ctx, p, frame, viewBounds));
 
     // --- DRAW TRINITY LINKS (Before sorted entities) ---
     ctx.save();
