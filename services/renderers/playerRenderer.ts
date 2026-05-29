@@ -2,7 +2,6 @@
 import { Player, MissionType } from '../../types';
 import { COLORS } from '../../constants';
 import { project3D, parseColorToRgb } from '../renderUtils';
-import { neonStroke, neonPoly, neonOrb } from './neonRender';
 
 export const drawPlayerMesh = (
     ctx: CanvasRenderingContext2D,
@@ -111,26 +110,23 @@ export const drawPlayerMesh = (
     }).sort((a, b) => a.depth - b.depth);
 
     // --- DRAW FUNCTIONS ---
-    // Glassy fresnel shell: near faces (depth >= 0) glow hotter than far ones.
     const drawShellFace = (f: any) => {
-        const brightness = f.depth >= 0 ? 0.85 : 0.3;
-        neonPoly(ctx, [f.v0, f.v1, f.v2], wireframeColor, {
-            width: shellLineWidth,
-            fillAlpha: 0.08,
-            brightness,
-            backingAlpha: 0.35,
-        });
+        ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.strokeStyle = wireframeColor;
+        ctx.lineWidth = shellLineWidth;
+        ctx.lineJoin = 'round';
+        ctx.fill();
+        ctx.stroke();
     };
 
-    // Emissive hot core.
     const drawCoreFace = (f: any) => {
-        const brightness = f.depth >= 0 ? 1.0 : 0.5;
-        neonPoly(ctx, [f.v0, f.v1, f.v2], color, {
-            width: 1,
-            fillAlpha: 0.35,
-            intensity: 1.2,
-            brightness,
-        });
+        ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
     };
 
     // 1. Far Shell Faces
@@ -332,16 +328,10 @@ export const drawPlayer = (
     const scale = 22; const vertices = [{ x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 }, { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 }, { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 }];
     const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
+    ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
     faces.forEach(f => {
         const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
-        // projectPlayer3D depth: smaller (negative) = nearer the camera.
-        const avgDepth = (v0.depth + v1.depth + v2.depth) / 3;
-        neonPoly(ctx, [v0, v1, v2], COLORS.white, {
-            width: 1.5,
-            fillAlpha: 0.08,
-            brightness: avgDepth < 0 ? 0.85 : 0.3,
-            backingAlpha: 0.35,
-        });
+        ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.strokeStyle = COLORS.white; ctx.fill(); ctx.stroke();
     });
 
     if (!isWeaponsJammed) {
@@ -442,14 +432,8 @@ export const drawPlayer = (
         const projVertsIco = rawVerts.map(v => { const rx = v.x * spinCos - v.z * spinSin; const rz = v.x * spinSin + v.z * spinCos; return projectPlayer3D(rx * s, v.y * s, rz * s); });
         const faceList = faces.map(f => { const v0 = projVertsIco[f[0]]; const v1 = projVertsIco[f[1]]; const v2 = projVertsIco[f[2]]; const depth = (v0.depth + v1.depth + v2.depth) / 3; return { v0, v1, v2, depth }; });
         faceList.sort((a, b) => b.depth - a.depth);
-        faceList.forEach(f => {
-            neonPoly(ctx, [f.v0, f.v1, f.v2], coreColor, {
-                width: 1,
-                fillAlpha: 0.4,
-                intensity: 1.3,
-                brightness: f.depth < 0 ? 1.0 : 0.5,
-            });
-        });
+        ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)'; ctx.lineWidth = 1; ctx.fillStyle = coreColor;
+        faceList.forEach(f => { ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.fill(); ctx.stroke(); });
     }
 
     // Front Layers - Skip if weapons jammed
@@ -479,14 +463,8 @@ export const drawPlayer = (
             const projVertsIco = rawVerts.map(v => { const rx = v.x * spinCos - v.z * spinSin; const rz = v.x * spinSin + v.z * spinCos; return { x: rx * s, y: v.y * s, z: rz * s }; });
             const faceList = faces.map(f => { const v0 = projVertsIco[f[0]]; const v1 = projVertsIco[f[1]]; const v2 = projVertsIco[f[2]]; const depth = (v0.z + v1.z + v2.z) / 3; return { v0, v1, v2, depth }; });
             faceList.sort((a, b) => b.depth - a.depth);
-            faceList.forEach(f => {
-                neonPoly(ctx, [f.v0, f.v1, f.v2], COLORS.orange, {
-                    width: 1,
-                    fillAlpha: 0.35,
-                    intensity: 1.1,
-                    brightness: f.depth < 0 ? 0.9 : 0.4,
-                });
-            });
+            ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)'; ctx.lineWidth = 1; ctx.fillStyle = COLORS.orange;
+            faceList.forEach(f => { ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.fill(); ctx.stroke(); });
             ctx.restore();
         }
     }
@@ -513,23 +491,31 @@ export const drawPlayer = (
         ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)'; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.stroke();
 
         if (pct > 0.01) {
+            ctx.beginPath();
+            first = true;
             const fillSegs = Math.ceil(segs * Math.min(1, pct));
-            const pts: { x: number, y: number }[] = [];
             for (let i = 0; i <= fillSegs; i++) {
                 let t = i / segs;
                 if (t > pct) t = pct;
                 const theta = startRad + (totalRad * t);
-                pts.push(projectUI3D(Math.cos(theta) * radius, Math.sin(theta) * radius, 0));
+                const proj = projectUI3D(Math.cos(theta) * radius, Math.sin(theta) * radius, 0);
+                if (first) { ctx.moveTo(proj.x, proj.y); first = false; } else { ctx.lineTo(proj.x, proj.y); }
             }
 
-            // Neon-tube health/XP arc; level-up ready arcs burn white & wider.
-            neonStroke(ctx, (c) => {
-                c.moveTo(pts[0].x, pts[0].y);
-                for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
-            }, isGlowing ? '#FFFFFF' : color, {
-                width: isGlowing ? width * 1.5 : width,
-                intensity: isGlowing ? 1.5 : 1.1,
-            });
+            ctx.strokeStyle = color;
+
+            if (isGlowing) {
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = '#FFFFFF';
+                ctx.lineWidth = width * 1.5;
+            } else {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                ctx.lineWidth = width;
+            }
+
+            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
     };
 
