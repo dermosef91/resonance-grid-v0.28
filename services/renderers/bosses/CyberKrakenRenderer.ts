@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonOrb } from '../neonRender';
 
 export const drawCyberKraken = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     const t = frame * 0.02;
@@ -68,43 +67,60 @@ export const drawCyberKraken = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
     ctx.lineJoin = 'round';
 
     pTentacles.forEach(arm => {
-        neonStroke(ctx, (c) => {
-            for(let i=0; i<arm.length-1; i++) {
-                c.moveTo(arm[i].x, arm[i].y);
-                c.lineTo(arm[i+1].x, arm[i+1].y);
-            }
-        }, colMain, { width: 1.5, glow: false, core: false });
-
+        ctx.beginPath();
+        ctx.strokeStyle = colMain;
+        ctx.lineWidth = 1.5;
+        for(let i=0; i<arm.length-1; i++) {
+            ctx.moveTo(arm[i].x, arm[i].y);
+            ctx.lineTo(arm[i+1].x, arm[i+1].y);
+        }
+        ctx.stroke();
+        
         arm.forEach((p, idx) => {
             if (idx === 0) return;
-            const size = Math.max(1, 3 - idx * 0.2);
-            neonOrb(ctx, p.x, p.y, size * p.scale, (idx % 3 === 0) ? colNode : colHighlight);
+            const size = Math.max(1, 3 - idx * 0.2); 
+            ctx.fillStyle = (idx % 3 === 0) ? colNode : colHighlight;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size * p.scale, 0, Math.PI*2);
+            ctx.fill();
         });
     });
 
-    neonStroke(ctx, (c) => {
-        pHeadRing.forEach(p => {
-            c.moveTo(pHeadTop.x, pHeadTop.y);
-            c.lineTo(p.x, p.y);
-        });
-        pHeadRing.forEach(p => {
-            c.moveTo(pHeadBottom.x, pHeadBottom.y);
-            c.lineTo(p.x, p.y);
-        });
-        for(let i=0; i<ringSides; i++) {
-            const p1 = pHeadRing[i];
-            const p2 = pHeadRing[(i+1)%ringSides];
-            c.moveTo(p1.x, p1.y);
-            c.lineTo(p2.x, p2.y);
-        }
-        c.moveTo(pHeadTop.x, pHeadTop.y);
-        c.lineTo(pHeadBottom.x, pHeadBottom.y);
-    }, colHighlight, { width: 2 });
-
+    ctx.strokeStyle = colHighlight;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = colMain;
+    ctx.shadowBlur = 15;
+    
+    ctx.beginPath();
+    pHeadRing.forEach(p => {
+        ctx.moveTo(pHeadTop.x, pHeadTop.y);
+        ctx.lineTo(p.x, p.y);
+    });
+    pHeadRing.forEach(p => {
+        ctx.moveTo(pHeadBottom.x, pHeadBottom.y);
+        ctx.lineTo(p.x, p.y);
+    });
+    for(let i=0; i<ringSides; i++) {
+        const p1 = pHeadRing[i];
+        const p2 = pHeadRing[(i+1)%ringSides];
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+    }
+    ctx.moveTo(pHeadTop.x, pHeadTop.y);
+    ctx.lineTo(pHeadBottom.x, pHeadBottom.y);
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
     const allHeadPts = [pHeadTop, pHeadBottom, ...pHeadRing];
     allHeadPts.forEach(p => {
-        neonOrb(ctx, p.x, p.y, 4 * p.scale, colNode);
+        ctx.fillStyle = colNode;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4 * p.scale, 0, Math.PI*2);
+        ctx.fill();
     });
-
-    neonOrb(ctx, pHeadBottom.x, pHeadBottom.y, 10, colMain, 0.5);
+    
+    ctx.fillStyle = 'rgba(255, 69, 0, 0.5)';
+    ctx.beginPath();
+    ctx.arc(pHeadBottom.x, pHeadBottom.y, 10, 0, Math.PI*2);
+    ctx.fill();
 };

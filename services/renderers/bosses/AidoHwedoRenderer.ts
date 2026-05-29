@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonOrb } from '../neonRender';
 
 export const drawAidoHwedo = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     // --- AIDO-HWEDO: THE BOUNDLESS COIL ---
@@ -31,35 +30,44 @@ export const drawAidoHwedo = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
         ctx.fill();
         
         // Shockwave rings
-        const prevA = ctx.globalAlpha;
-        ctx.globalAlpha = prevA * alpha;
-        neonStroke(ctx, (c) => {
-            c.arc(0, 0, flareSize * 0.8, 0, Math.PI * 2);
-        }, '#FFFFFF', { width: 5 });
-        ctx.globalAlpha = prevA;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, flareSize * 0.8, 0, Math.PI * 2);
+        ctx.stroke();
     }
 
     // DRAW RINGS (Counter Rotating)
     const drawRing = (radius: number, angle: number, color: string, gapSize: number) => {
         ctx.save();
         ctx.rotate(angle);
-
-        neonStroke(ctx, (c) => {
-            c.arc(0, 0, radius, gapSize/2, Math.PI * 2 - gapSize/2);
-        }, color, { width: 4 });
-
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, gapSize/2, Math.PI * 2 - gapSize/2);
+        
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        
         // Double Line effect
-        neonStroke(ctx, (c) => {
-            c.arc(0, 0, radius - 8, gapSize/2 + 0.1, Math.PI * 2 - gapSize/2 - 0.1);
-        }, '#FFFFFF', { width: 2, glow: false, core: false });
-
-        // Gap Indicators (Sparks at edges) — pre-compute random size ONCE
+        ctx.beginPath();
+        ctx.arc(0, 0, radius - 8, gapSize/2 + 0.1, Math.PI * 2 - gapSize/2 - 0.1);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+        
+        // Gap Indicators (Sparks at edges)
         const sparkSize = 4 + Math.random() * 4;
         const gapStart = gapSize/2;
         const gapEnd = Math.PI * 2 - gapSize/2;
-
-        neonOrb(ctx, Math.cos(gapStart)*radius, Math.sin(gapStart)*radius, sparkSize, '#FFFFFF');
-        neonOrb(ctx, Math.cos(gapEnd)*radius, Math.sin(gapEnd)*radius, sparkSize, '#FFFFFF');
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(Math.cos(gapStart)*radius, Math.sin(gapStart)*radius, sparkSize, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(Math.cos(gapEnd)*radius, Math.sin(gapEnd)*radius, sparkSize, 0, Math.PI*2); ctx.fill();
 
         ctx.restore();
     };
@@ -90,33 +98,40 @@ export const drawAidoHwedo = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
             const wallStart = startAngle;
             const wallEnd = startAngle + segAngle * (1 - gapRatio);
             
-            neonStroke(ctx, (c) => {
-                c.arc(0, 0, r3, wallStart, wallEnd);
-            }, '#8B0000', { width: 3, glow: false, core: false });
-
+            ctx.beginPath();
+            ctx.arc(0, 0, r3, wallStart, wallEnd);
+            ctx.strokeStyle = '#8B0000'; // Dark Red for outer
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#FF0000';
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+            
             // Draw DOOR part (Spikes) if closed
             if (!p2.doorsOpen) {
                 // SPIKES VISUAL
                 const doorStart = wallEnd;
                 const doorEnd = startAngle + segAngle; // Next start
-
+                
                 // Flicker effect when appearing/disappearing
                 const flicker = Math.random() > 0.1 ? 1 : 0.5;
                 ctx.globalAlpha = flicker;
-
-                // Pre-compute jagged spike points ONCE for deterministic re-traces
+                
+                // Draw jagged spikes in the gap
+                ctx.beginPath();
                 const spikeCount = 8; // More spikes for larger ring
                 const arcLen = doorEnd - doorStart;
-                const spikePts: {x:number, y:number}[] = [];
                 for(let j=0; j<=spikeCount; j++) {
                     const a = doorStart + (j/spikeCount) * arcLen;
                     const r = r3 + (j%2 === 0 ? 15 : -15); // Larger spikes
-                    spikePts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+                    const x = Math.cos(a) * r;
+                    const y = Math.sin(a) * r;
+                    if (j===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
                 }
-                neonStroke(ctx, (c) => {
-                    c.moveTo(spikePts[0].x, spikePts[0].y);
-                    for(let j=1; j<spikePts.length; j++) c.lineTo(spikePts[j].x, spikePts[j].y);
-                }, '#FF0000', { width: 2 });
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 2;
+                ctx.shadowColor = '#FF0000';
+                ctx.shadowBlur = 10;
+                ctx.stroke();
                 ctx.globalAlpha = 1.0;
             } else {
                 // Hint at open door (faint lines)
@@ -149,23 +164,27 @@ export const drawAidoHwedo = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
     const projected = verts.map(v => project3D(v.x * coreScale, v.y * coreScale, v.z * coreScale, coreRotX, coreRotY, 0, 400));
 
     // Simple wireframe for core
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
     // Connect nearest neighbors (naive approach for visual density)
-    const coreSegs: (readonly [{x:number,y:number}, {x:number,y:number}])[] = [];
     for (let i = 0; i < projected.length; i++) {
         for (let j = i + 1; j < projected.length; j++) {
             const dx = projected[i].x - projected[j].x;
             const dy = projected[i].y - projected[j].y;
             const dist = Math.sqrt(dx*dx + dy*dy);
             if (dist < coreScale * 1.2) {
-                coreSegs.push([projected[i], projected[j]]);
+                ctx.moveTo(projected[i].x, projected[i].y);
+                ctx.lineTo(projected[j].x, projected[j].y);
             }
         }
     }
-    neonStroke(ctx, (c) => {
-        coreSegs.forEach(([a, b]) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); });
-    }, '#FFFFFF', { width: 2 });
-
+    ctx.stroke();
+    
     // Core Fill
     const pulse = 1 + Math.sin(frame * 0.2) * 0.2;
-    neonOrb(ctx, 0, 0, coreScale * 0.8, '#FF3200', 0.6 * pulse);
+    ctx.fillStyle = `rgba(255, 50, 0, ${0.6 * pulse})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreScale * 0.8, 0, Math.PI * 2);
+    ctx.fill();
 };

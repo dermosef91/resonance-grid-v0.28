@@ -2,7 +2,6 @@
 import { MissionEntity, Player, MissionState } from '../../types';
 import { project3D, drawLightningBolt, hexToRgba } from '../renderUtils';
 import { drawPlayer, drawPlayerMesh } from './playerRenderer';
-import { neonStroke, neonPoly, neonOrb } from './neonRender';
 
 export const drawMissionEntity = (
     ctx: CanvasRenderingContext2D,
@@ -95,25 +94,22 @@ export const drawMissionEntity = (
         const pBase = baseVerts.map(v => isoProject(v.x, v.y, v.z));
 
         ctx.fillStyle = '#111111';
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 1;
         ctx.lineJoin = 'round';
 
-        const baseFaceIdx = [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]];
-        baseFaceIdx.forEach(indices => {
+        const drawFace = (indices: number[]) => {
             ctx.beginPath();
             const start = pBase[indices[0]];
             ctx.moveTo(start.x, start.y);
             for (let i = 1; i < indices.length; i++) ctx.lineTo(pBase[indices[i]].x, pBase[indices[i]].y);
             ctx.closePath();
             ctx.fill();
-        });
-        neonStroke(ctx, (c) => {
-            baseFaceIdx.forEach(indices => {
-                const start = pBase[indices[0]];
-                c.moveTo(start.x, start.y);
-                for (let i = 1; i < indices.length; i++) c.lineTo(pBase[indices[i]].x, pBase[indices[i]].y);
-                c.closePath();
-            });
-        }, mainColor, { width: 1, glow: false, core: false });
+            ctx.stroke();
+        };
+
+        // Draw Base Faces
+        drawFace([0, 1, 4]); drawFace([1, 2, 4]); drawFace([2, 3, 4]); drawFace([3, 0, 4]);
 
         // B. Floating Emitter (Rotating & Opening)
         const eW = 10;
@@ -137,7 +133,10 @@ export const drawMissionEntity = (
         });
 
         ctx.fillStyle = isActive ? '#FFFFFF' : '#333333';
-        ctx.strokeStyle = mainColor;
+        if (isActive) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = mainColor;
+        }
 
         // Draw Emitter Faces
         const emitFaces = [
@@ -152,17 +151,10 @@ export const drawMissionEntity = (
             for (let i = 1; i < indices.length; i++) ctx.lineTo(pEmit[indices[i]].x, pEmit[indices[i]].y);
             ctx.closePath();
             ctx.fill();
+            ctx.stroke();
         });
 
-        const emitTrace = (c: CanvasRenderingContext2D) => {
-            emitFaces.forEach(indices => {
-                const start = pEmit[indices[0]];
-                c.moveTo(start.x, start.y);
-                for (let i = 1; i < indices.length; i++) c.lineTo(pEmit[indices[i]].x, pEmit[indices[i]].y);
-                c.closePath();
-            });
-        };
-        neonStroke(ctx, emitTrace, mainColor, { width: 1, glow: isActive });
+        ctx.shadowBlur = 0;
 
         // --- 3. LASER PROJECTION ---
         // Beams from Emitter Top to Perimeter
@@ -203,7 +195,10 @@ export const drawMissionEntity = (
             ctx.setLineDash([]);
 
             // Dot on ground
-            neonOrb(ctx, pGround.x, pGround.y, isActive ? 4 : 2, mainColor);
+            ctx.fillStyle = mainColor;
+            ctx.beginPath();
+            ctx.arc(pGround.x, pGround.y, isActive ? 4 : 2, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         // Central Uplink Beam (When active)
@@ -239,24 +234,28 @@ export const drawMissionEntity = (
             ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2); ctx.fill();
 
             // Chaotic Void Rings
+            ctx.lineWidth = 2;
             for (let r = 0; r < rings; r++) {
                 const ringOffset = (r / rings) * Math.PI;
                 const rX = t * (r % 2 === 0 ? 1 : -1) + ringOffset;
                 const rY = t * (r % 2 === 0 ? 0.7 : -0.7);
                 const rZ = t * 0.3;
 
+                ctx.beginPath();
                 const segments = 32;
-                const ringPts: { x: number, y: number }[] = [];
                 for (let i = 0; i <= segments; i++) {
                     const theta = (i / segments) * Math.PI * 2;
                     const lx = Math.cos(theta) * radius;
                     const ly = Math.sin(theta) * radius;
-                    ringPts.push(project3D(lx, ly, 0, rX, rY, rZ));
+                    const p = project3D(lx, ly, 0, rX, rY, rZ);
+                    if (i === 0) ctx.moveTo(p.x, p.y);
+                    else ctx.lineTo(p.x, p.y);
                 }
                 const alpha = 0.4 + Math.sin(t * 3 + r) * 0.2;
-                neonStroke(ctx, (c) => {
-                    ringPts.forEach((p, i) => i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y));
-                }, `rgba(150, 0, 255, ${alpha})`, { width: 2, glow: false, core: false }); // Purple pulsing
+                ctx.strokeStyle = `rgba(150, 0, 255, ${alpha})`; // Purple pulsing
+                ctx.shadowBlur = 10; ctx.shadowColor = '#9900FF';
+                ctx.stroke();
+                ctx.shadowBlur = 0;
             }
 
             // Core Text/Symbol
@@ -326,9 +325,17 @@ export const drawMissionEntity = (
 
             // Draw Inner Glow
             const pulse = 1 + Math.sin(frame * 0.1) * 0.1;
-            neonOrb(ctx, 0, 0, 10 * pulse, '#00FFFF');
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.shadowColor = '#00FFFF';
+            ctx.shadowBlur = 20 * pulse;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
 
             // Draw Wireframe
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 2;
             ctx.lineJoin = 'round';
 
             const edges = [
@@ -337,14 +344,14 @@ export const drawMissionEntity = (
                 [1, 2], [2, 4], [4, 3], [3, 1]  // Equator
             ];
 
-            neonStroke(ctx, (c) => {
-                edges.forEach(edge => {
-                    const p1 = projected[edge[0]];
-                    const p2 = projected[edge[1]];
-                    c.moveTo(p1.x, p1.y);
-                    c.lineTo(p2.x, p2.y);
-                });
-            }, '#00FFFF', { width: 2 });
+            ctx.beginPath();
+            edges.forEach(edge => {
+                const p1 = projected[edge[0]];
+                const p2 = projected[edge[1]];
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+            });
+            ctx.stroke();
 
             // 3. Draw Destination Indicator (Arrow)
             if (e.destination) {
@@ -371,18 +378,22 @@ export const drawMissionEntity = (
 
         // --- 1. Circular Base ---
         const rings = [60, 80];
+        ctx.lineWidth = 2;
 
         rings.forEach(r => {
+            ctx.beginPath();
             const segs = 32;
-            const ringPts: { x: number, y: number }[] = [];
             for (let i = 0; i <= segs; i++) {
                 const theta = (i / segs) * Math.PI * 2;
                 // Project base rings on ground plane (y=0)
-                ringPts.push(project3D(Math.cos(theta) * r, 0, Math.sin(theta) * r, 0, rotY, 0, 300));
+                const p = project3D(Math.cos(theta) * r, 0, Math.sin(theta) * r, 0, rotY, 0, 300);
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
             }
-            neonStroke(ctx, (c) => {
-                ringPts.forEach((p, i) => i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y));
-            }, e.active ? 'rgba(0, 255, 0, 0.5)' : 'rgba(100, 100, 100, 0.3)', { width: 2, glow: e.active, core: e.active });
+            ctx.strokeStyle = e.active ? 'rgba(0, 255, 0, 0.5)' : 'rgba(100, 100, 100, 0.3)';
+            ctx.shadowBlur = e.active ? 10 : 0; // Reduced blur
+            ctx.shadowColor = '#00FF00';
+            ctx.stroke();
         });
 
         // --- 2. Obelisk Body ---
@@ -427,10 +438,19 @@ export const drawMissionEntity = (
             return { indices, depth, ps };
         }).sort((a, b) => a.depth - b.depth);
 
+        ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
 
-        const strokeColor = e.active ? '#FFFFFF' : '#555555';
-        ctx.fillStyle = e.active ? 'rgba(0, 30, 0, 0.2)' : 'rgba(20, 20, 20, 0.9)';
+        if (e.active) {
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.shadowBlur = 10; // Reduced blur
+            ctx.shadowColor = '#00FF00';
+            ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; // Dark transparent green
+        } else {
+            ctx.strokeStyle = '#555555';
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(20, 20, 20, 0.9)'; // Dark monolith
+        }
 
         // Draw
         sortedFaces.forEach(f => {
@@ -441,11 +461,7 @@ export const drawMissionEntity = (
             }
             ctx.closePath();
             ctx.fill();
-            neonStroke(ctx, (c) => {
-                c.moveTo(f.ps[0].x, f.ps[0].y);
-                for (let i = 1; i < f.ps.length; i++) c.lineTo(f.ps[i].x, f.ps[i].y);
-                c.closePath();
-            }, strokeColor, { width: 2, glow: e.active, core: e.active });
+            ctx.stroke();
         });
 
         // --- 3. Activation Effects ---
@@ -468,19 +484,23 @@ export const drawMissionEntity = (
             ctx.fill();
 
             // Core Laser Line
-            neonStroke(ctx, (c) => {
-                c.moveTo(tip.x, tip.y);
-                c.lineTo(tip.x, tip.y - 1000);
-            }, '#FFFFFF', { width: 2 });
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00FF00';
+            ctx.beginPath();
+            ctx.moveTo(tip.x, tip.y);
+            ctx.lineTo(tip.x, tip.y - 1000);
+            ctx.stroke();
         }
 
         ctx.shadowBlur = 0;
 
     } else if (e.kind === 'STATION') {
         ctx.scale(1, 0.5); const pulse = 1 + Math.sin(frame * 0.05) * 0.1;
-        neonStroke(ctx, (c) => { c.arc(0, 0, e.radius * pulse, 0, Math.PI * 2); }, '#FFFFFF', { width: 3 });
-        neonStroke(ctx, (c) => { c.arc(0, 0, e.radius * 0.7, 0, Math.PI * 2); }, '#FFFFFF', { width: 3 });
-        ctx.beginPath(); ctx.arc(0, 0, e.radius * 0.7, 0, Math.PI * 2);
+        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = '#FFFFFF';
+        ctx.beginPath(); ctx.arc(0, 0, e.radius * pulse, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, e.radius * 0.7, 0, Math.PI * 2); ctx.stroke();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
         ctx.scale(1, 2); const grad = ctx.createLinearGradient(0, 0, 0, -400);
         grad.addColorStop(0, 'rgba(255, 255, 255, 0.5)'); grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
@@ -530,14 +550,21 @@ export const drawMissionEntity = (
         const pulse = 1 + Math.sin(frame * 0.1) * 0.15;
         const color = e.color || '#00FFFF';
 
-        const ringColor = e.active ? '#FFFFFF' : color;
-        neonStroke(ctx, (c) => { c.arc(0, 0, e.radius * pulse, 0, Math.PI * 2); }, ringColor, { width: 4 });
-
-        // Inner spinning ring
-        neonStroke(ctx, (c) => { c.arc(0, 0, e.radius * 0.7, frame * 0.1, frame * 0.1 + Math.PI * 1.5); }, ringColor, { width: 2 });
+        ctx.strokeStyle = e.active ? '#FFFFFF' : color;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = color;
 
         ctx.beginPath();
+        ctx.arc(0, 0, e.radius * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner spinning ring
+        ctx.beginPath();
         ctx.arc(0, 0, e.radius * 0.7, frame * 0.1, frame * 0.1 + Math.PI * 1.5);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
         ctx.fillStyle = e.active ? color : 'transparent';
         ctx.globalAlpha = 0.2;
         ctx.fill();
@@ -759,7 +786,14 @@ export const drawMissionEntity = (
         ctx.fill();
 
         // 2. Event Horizon Rim (Glow)
-        neonStroke(ctx, (c) => { c.arc(0, 0, coreScale, 0, Math.PI * 2); }, '#FFFFFF', { width: 3 });
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#FF0000';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, coreScale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
 
         // 3. Multi-Layer Accretion Disk
         const layers = [
@@ -806,9 +840,13 @@ export const drawMissionEntity = (
         });
 
         // 4. Lensing Distortion Ring (White outline)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
         const distR = coreScale * 1.5 + Math.sin(t * 5) * 5;
         if (Number.isFinite(distR) && distR >= 0) {
-            neonStroke(ctx, (c) => { c.arc(0, 0, distR, 0, Math.PI * 2); }, 'rgba(255, 255, 255, 0.5)', { width: 1, glow: false, core: false });
+            ctx.arc(0, 0, distR, 0, Math.PI * 2);
+            ctx.stroke();
         }
     } else if (e.kind === 'ALLY') {
 
@@ -881,10 +919,14 @@ export const drawMissionEntity = (
         // Max distance for connection check:
         const connectDist = (2 / phi) * rCage * 0.6 * 1.1; // 10% tolerance
 
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
         ctx.lineJoin = 'round';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
 
+        ctx.beginPath();
         // Naive distance check for wireframe (O(N^2) but N=20 is tiny)
-        const cageSegs: [{ x: number, y: number }, { x: number, y: number }][] = [];
         for (let i = 0; i < scaledVerts.length; i++) {
             for (let j = i + 1; j < scaledVerts.length; j++) {
                 const d = Math.sqrt(
@@ -893,13 +935,12 @@ export const drawMissionEntity = (
                     (scaledVerts[i].z - scaledVerts[j].z) ** 2
                 );
                 if (d < connectDist) {
-                    cageSegs.push([projVerts[i], projVerts[j]]);
+                    ctx.moveTo(projVerts[i].x, projVerts[i].y);
+                    ctx.lineTo(projVerts[j].x, projVerts[j].y);
                 }
             }
         }
-        neonStroke(ctx, (c) => {
-            cageSegs.forEach(([a, b]) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); });
-        }, color, { width: 1.5, glow: false, core: false });
+        ctx.stroke();
 
         // Fill Faces (Transparent)
         // Hard to do strictly correct without depth sort, but a faint fill helps volume

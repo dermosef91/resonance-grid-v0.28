@@ -124,24 +124,16 @@ export const drawGhost = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
 };
 
 export const drawTank = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    ctx.rotate(e.rotation || 0);
-    const traceOctagon = (r: number, rot: number) => (c: CanvasRenderingContext2D) => { for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2 + rot; const x = Math.cos(angle) * r; const y = Math.sin(angle) * r; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.closePath(); };
-
-    // Dark armoured body backing, then neon hull.
-    ctx.fillStyle = 'rgba(2, 2, 6, 0.85)'; ctx.beginPath(); traceOctagon(e.radius, Math.PI / 8)(ctx); ctx.fill();
-    neonStroke(ctx, traceOctagon(e.radius, Math.PI / 8), COLORS.orange, { width: 2 });
-    neonStroke(ctx, traceOctagon(e.radius * 0.8, Math.PI / 8), '#cc5200', { width: 1, glow: false, core: false });
-
-    // Spokes.
-    const spokeSegs: [Pt, Pt][] = [];
-    for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2 + Math.PI / 8; spokeSegs.push([{ x: Math.cos(angle) * e.radius * 0.4, y: Math.sin(angle) * e.radius * 0.4 }, { x: Math.cos(angle) * e.radius, y: Math.sin(angle) * e.radius }]); }
-    neonStroke(ctx, edgeTrace(spokeSegs), COLORS.orange, { width: 1, glow: false, core: false });
-
-    // Turret.
+    ctx.rotate(e.rotation || 0); const traceOctagon = (r: number, rot: number) => { for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2 + rot; const x = Math.cos(angle) * r; const y = Math.sin(angle) * r; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); };
+    ctx.fillStyle = '#000000'; ctx.beginPath(); traceOctagon(e.radius, Math.PI / 8); ctx.fill();
+    ctx.strokeStyle = COLORS.orange; ctx.lineWidth = 2; ctx.beginPath(); traceOctagon(e.radius, Math.PI / 8); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = '#cc5200'; ctx.beginPath(); traceOctagon(e.radius * 0.8, Math.PI / 8); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = COLORS.orange;
+    for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2 + Math.PI / 8; ctx.beginPath(); ctx.moveTo(Math.cos(angle) * e.radius * 0.4, Math.sin(angle) * e.radius * 0.4); ctx.lineTo(Math.cos(angle) * e.radius, Math.sin(angle) * e.radius); ctx.stroke(); }
     const turretR = e.radius * 0.45; const spin = frame * 0.01;
-    ctx.fillStyle = 'rgba(10, 6, 0, 0.9)'; ctx.beginPath(); traceOctagon(turretR, spin)(ctx); ctx.fill();
-    neonStroke(ctx, traceOctagon(turretR, spin), '#ffffff', { width: 1.5, glow: false });
-    neonOrb(ctx, 0, 0, 5, '#ff3300', 1.2);
+    ctx.fillStyle = '#1a0d00'; ctx.beginPath(); traceOctagon(turretR, spin); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.beginPath(); traceOctagon(turretR, spin); ctx.stroke();
+    ctx.fillStyle = '#ff3300'; ctx.beginPath(); ctx.rect(-5, -5, 10, 10); ctx.fill();
 };
 
 export const drawSwarmer = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
@@ -214,14 +206,25 @@ export const drawNeonCobra = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
 
     const pHead = headVerts.map(v => project3D(v.x, v.y, v.z, headRotX, headRotY, 0, 200));
 
-    // Draw Head as a glowing neon pyramid.
-    const headColor = e.color || '#FF00CC';
+    // Draw Head
+    ctx.strokeStyle = e.color || '#FF00CC';
+    ctx.fillStyle = e.color || '#FF00CC'; // Use enemy color (Pink/Magenta)
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+
     const headEdges = [
         [0, 1], [0, 2], [0, 3], [0, 4], // Tip connections
         [1, 2], [2, 3], [3, 4], [4, 1]  // Base connections
     ];
-    const headSegs: [Pt, Pt][] = headEdges.map(([i, j]) => [pHead[i], pHead[j]]);
-    neonStroke(ctx, edgeTrace(headSegs), headColor, { width: 1.5, intensity: 1.0 });
+
+    ctx.beginPath();
+    headEdges.forEach(([i, j]) => {
+        ctx.moveTo(pHead[i].x, pHead[i].y);
+        ctx.lineTo(pHead[j].x, pHead[j].y);
+    });
+    ctx.fill();
+    ctx.stroke();
 
     // --- TAIL SEGMENTS (3D Cubes) ---
     const segments = 6;
@@ -251,6 +254,8 @@ export const drawNeonCobra = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
         });
 
         const alpha = 0.8 - (i * 0.1);
+        ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+        ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha + 0.2})`;
 
         const cubeEdges = [
             [0, 1], [0, 2], [0, 4], // Corner 0
@@ -262,25 +267,25 @@ export const drawNeonCobra = (ctx: CanvasRenderingContext2D, e: Enemy, frame: nu
             [6, 7]
         ];
 
-        const cubeSegs: [Pt, Pt][] = cubeEdges.map(([a, b]) => [pCube[a], pCube[b]]);
-        neonStroke(ctx, edgeTrace(cubeSegs), e.color || '#FF00CC', { width: 1.2, intensity: alpha + 0.2, glow: false, core: false });
+        ctx.beginPath();
+        cubeEdges.forEach(([a, b]) => {
+            ctx.moveTo(pCube[a].x, pCube[a].y);
+            ctx.lineTo(pCube[b].x, pCube[b].y);
+        });
+        ctx.fill();
+        ctx.stroke();
     }
 
     ctx.restore();
 };
 
 export const drawInfernoSpinner = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    ctx.rotate(frame * 0.3); const bladeCount = 3;
-    neonOrb(ctx, 0, 0, e.radius * 0.4, '#ff4400', 1.3);
+    ctx.rotate(frame * 0.3); const bladeCount = 3; ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(0, 0, e.radius * 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#882200'; ctx.strokeStyle = '#ff8800';
     for (let i = 0; i < bladeCount; i++) {
         const angle = (i / bladeCount) * Math.PI * 2; ctx.save(); ctx.rotate(angle);
-        neonPoly(ctx, [
-            { x: 0, y: -e.radius * 0.4 },
-            { x: e.radius * 0.5, y: -e.radius * 1.2 },
-            { x: -e.radius * 0.5, y: -e.radius * 1.2 },
-        ], '#ff8800', { width: 1.5, fillAlpha: 0.18, intensity: 1.0 });
-        neonOrb(ctx, 0, -e.radius, e.radius * 0.3, '#ff6400', 0.9);
-        ctx.restore();
+        ctx.beginPath(); ctx.moveTo(0, -e.radius * 0.4); ctx.lineTo(e.radius * 0.5, -e.radius * 1.2); ctx.lineTo(-e.radius * 0.5, -e.radius * 1.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.5)'; ctx.beginPath(); ctx.arc(0, -e.radius, e.radius * 0.3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
 };
 
@@ -288,38 +293,24 @@ export const drawBinarySentinel = (ctx: CanvasRenderingContext2D, e: Enemy, fram
     let separation = e.radius; let angle = frame * 0.05; let nodeRadius = e.radius * 0.6;
     if (e.binaryData) { angle = e.binaryData.angle; separation = e.binaryData.separation / 2; nodeRadius = e.binaryData.nodeRadius; }
     const cos = Math.cos(angle); const sin = Math.sin(angle);
-    for (let dir of [-1, 1]) {
-        const x = dir * separation * cos; const y = dir * separation * sin; ctx.save(); ctx.translate(x, y);
-        ctx.fillStyle = 'rgba(10, 10, 14, 0.9)'; ctx.beginPath(); ctx.arc(0, 0, nodeRadius, 0, Math.PI * 2); ctx.fill();
-        neonStroke(ctx, (c) => c.arc(0, 0, nodeRadius, 0, Math.PI * 2), '#ffffff', { width: 2, glow: false });
-        neonOrb(ctx, 0, 0, 4, '#ff0000', 1.3);
-        ctx.restore();
-    }
-    // Pre-compute the jittered beam so neon passes align.
-    const startX = -separation * cos; const startY = -separation * sin; const endX = separation * cos; const endY = separation * sin;
+    for (let dir of [-1, 1]) { const x = dir * separation * cos; const y = dir * separation * sin; ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#222'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, nodeRadius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 4 + Math.sin(frame * 0.5) * 2; ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff'; ctx.beginPath();
+    const startX = -separation * cos; const startY = -separation * sin; const endX = separation * cos; const endY = separation * sin; ctx.moveTo(startX, startY);
     const steps = 10; const stepX = (endX - startX) / steps; const stepY = (endY - startY) / steps;
-    const beamPts: Pt[] = [{ x: startX, y: startY }];
-    for (let i = 1; i < steps; i++) { const jitter = (Math.random() - 0.5) * 10; beamPts.push({ x: startX + stepX * i + jitter, y: startY + stepY * i + jitter }); }
-    beamPts.push({ x: endX, y: endY });
-    neonStroke(ctx, (c) => { c.moveTo(beamPts[0].x, beamPts[0].y); for (let i = 1; i < beamPts.length; i++) c.lineTo(beamPts[i].x, beamPts[i].y); }, '#00ffff', { width: 4 + Math.sin(frame * 0.5) * 2, intensity: 1.2 });
+    for (let i = 1; i < steps; i++) { const jitter = (Math.random() - 0.5) * 10; ctx.lineTo(startX + stepX * i + jitter, startY + stepY * i + jitter); }
+    ctx.lineTo(endX, endY); ctx.stroke(); ctx.shadowBlur = 0;
 };
 
 export const drawLaserLotus = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    ctx.rotate(e.rotation || 0);
-    // Hex core.
-    const hexPts: Pt[] = [];
-    for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; const r = e.radius * 0.4; hexPts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r }); }
-    neonPoly(ctx, hexPts, '#ff0055', { width: 2, fillAlpha: 0.25, intensity: 1.1 });
-
-    const petals = 6;
+    ctx.rotate(e.rotation || 0); ctx.fillStyle = '#ff0055'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; const r = e.radius * 0.4; if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill(); ctx.stroke();
+    const petals = 6; ctx.strokeStyle = '#ff0055'; ctx.lineWidth = 1.5;
     for (let i = 0; i < petals; i++) {
-        const angle = (i / petals) * Math.PI * 2; const pulse = Math.sin(frame * 0.1 + i) * 2; ctx.save(); ctx.rotate(angle);
+        const angle = (i / petals) * Math.PI * 2; const pulse = Math.sin(frame * 0.1 + i) * 2; ctx.save(); ctx.rotate(angle); ctx.beginPath();
         const inner = e.radius * 0.5 + pulse; const outer = e.radius * 1.2; const width = e.radius * 0.3;
-        neonPoly(ctx, [
-            { x: inner, y: 0 }, { x: (inner + outer) / 2, y: width }, { x: outer, y: 0 }, { x: (inner + outer) / 2, y: -width },
-        ], '#ff0055', { width: 1.5, fillAlpha: 0.12, glow: false });
-        neonStroke(ctx, (c) => { c.moveTo(e.radius * 0.4, 0); c.lineTo(inner, 0); }, 'rgba(255, 255, 255, 0.5)', { width: 1, glow: false, core: false });
-        ctx.restore();
+        ctx.moveTo(inner, 0); ctx.lineTo((inner + outer) / 2, width); ctx.lineTo(outer, 0); ctx.lineTo((inner + outer) / 2, -width); ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 0, 85, 0.15)'; ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(e.radius * 0.4, 0); ctx.lineTo(inner, 0); ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
     }
 };
 
@@ -588,7 +579,15 @@ export const drawPrismaticMonolith = (ctx: CanvasRenderingContext2D, e: Enemy, f
         const mid = [pts[1], pts[2], pts[3]];
         const bot = pts[4];
 
-        const crystalColor = isInner ? '#FFFFFF' : edgeColor;
+        ctx.strokeStyle = isInner ? '#FFFFFF' : edgeColor;
+        ctx.fillStyle = isInner ? '#FFFFFF' : faceColor;
+
+        if (isInner) ctx.shadowBlur = 15;
+        if (isInner) ctx.shadowColor = edgeColor;
+
+        // Draw Faces (Top Pyramid)
+        // Correct draw order for simple transparency: Back faces first? 
+        // Just draw all, the alpha handles the look for this style
 
         const faces = [
             [top, mid[0], mid[1]], [top, mid[1], mid[2]], [top, mid[2], mid[0]], // Top
@@ -596,12 +595,16 @@ export const drawPrismaticMonolith = (ctx: CanvasRenderingContext2D, e: Enemy, f
         ];
 
         faces.forEach(face => {
-            neonPoly(ctx, [face[0], face[1], face[2]], crystalColor, {
-                width: isInner ? 1.5 : 2,
-                fillAlpha: isInner ? 0.3 : 0.12,
-                intensity: isInner ? 1.3 : 1.0,
-            });
+            ctx.beginPath();
+            ctx.moveTo(face[0].x, face[0].y);
+            ctx.lineTo(face[1].x, face[1].y);
+            ctx.lineTo(face[2].x, face[2].y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
         });
+
+        ctx.shadowBlur = 0;
     };
 
     // Draw Inner Core First

@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonOrb } from '../neonRender';
 
 export const drawSolarSeraph = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     const scale = e.radius * 0.7;
@@ -124,24 +123,47 @@ export const drawSolarSeraph = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
     ctx.lineJoin = 'round';
 
     renderList.forEach(e => {
-        const front = e.depth < 0;
-        ctx.globalAlpha = front ? e.alpha : e.alpha * 0.5;
-        neonStroke(ctx, (c) => {
-            c.moveTo(e.v1.x, e.v1.y);
-            c.lineTo(e.v2.x, e.v2.y);
-        }, e.color, { width: front ? 2 : 1, glow: front, core: front });
+        ctx.beginPath();
+        ctx.moveTo(e.v1.x, e.v1.y);
+        ctx.lineTo(e.v2.x, e.v2.y);
+        
+        if (e.depth < 0) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = e.color;
+            ctx.strokeStyle = e.color;
+            ctx.globalAlpha = e.alpha;
+            ctx.lineWidth = 2;
+        } else {
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = e.color;
+            ctx.globalAlpha = e.alpha * 0.5; 
+            ctx.lineWidth = 1;
+        }
+        ctx.stroke();
     });
-
+    
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1.0;
 
     projected.forEach(p => {
         if (p.type === 'WIRE') return;
         const size = (p.depth < 0 ? 3 : 1.5) * p.scale;
         const alpha = p.depth < 0 ? 1.0 : 0.5;
-
+        
+        ctx.fillStyle = '#FFFFFF';
         ctx.globalAlpha = alpha;
-        neonOrb(ctx, p.x, p.y, size, '#FFFFFF');
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (p.type === 'CORE' && p.depth < 0) {
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
     });
-
+    
     ctx.globalAlpha = 1.0;
 };

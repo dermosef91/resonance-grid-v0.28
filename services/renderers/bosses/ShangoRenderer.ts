@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonPoly, neonOrb } from '../neonRender';
 
 export const drawShango = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     // --- SHANGO'S WRATH ---
@@ -83,23 +82,22 @@ export const drawShango = (ctx: CanvasRenderingContext2D, e: Enemy, frame: numbe
         return { ...f, d: depth };
     }).sort((a, b) => a.d - b.d).forEach(f => {
         const ps = f.idx.map(i => projected[i]);
-        // Brightness from face depth: closer faces (more negative depth) glow hotter.
-        const avgScale = ps.reduce((acc, p) => acc + p.scale, 0) / ps.length;
-        const bright = Math.max(0, Math.min(1, (avgScale - 0.85) / 0.4));
-        neonPoly(ctx, ps, f.str, { backingAlpha: 0.35, width: 0.8, brightness: bright, glow: false, core: false });
+        ctx.beginPath();
+        ctx.moveTo(ps[0].x, ps[0].y);
+        for(let i=1; i<ps.length; i++) ctx.lineTo(ps[i].x, ps[i].y);
+        ctx.closePath();
+        ctx.fillStyle = f.col; ctx.fill();
+        ctx.strokeStyle = f.str; ctx.lineWidth = 0.8; ctx.stroke();
 
         if (f.type === 'handle') { // Digital Banding
-            const bands: (readonly [{x:number,y:number}, {x:number,y:number}])[] = [];
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             for(let j=1; j<6; j++) {
                 const r = j/6;
-                bands.push([
-                    { x: ps[0].x + (ps[3].x - ps[0].x)*r, y: ps[0].y + (ps[3].y - ps[0].y)*r },
-                    { x: ps[1].x + (ps[2].x - ps[1].x)*r, y: ps[1].y + (ps[2].y - ps[1].y)*r },
-                ]);
+                ctx.beginPath();
+                ctx.moveTo(ps[0].x + (ps[3].x - ps[0].x)*r, ps[0].y + (ps[3].y - ps[0].y)*r);
+                ctx.lineTo(ps[1].x + (ps[2].x - ps[1].x)*r, ps[1].y + (ps[2].y - ps[1].y)*r);
+                ctx.stroke();
             }
-            neonStroke(ctx, (c) => {
-                bands.forEach(([a, b]) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); });
-            }, 'rgba(255, 255, 255, 0.4)', { width: 1, glow: false, core: false });
         }
     });
 
@@ -112,25 +110,33 @@ export const drawShango = (ctx: CanvasRenderingContext2D, e: Enemy, frame: numbe
         const pF2 = project3D(Math.cos(aE)*rR, Math.sin(aE)*rR, 8, rotX, rotY, 0, 400);
         const pB2 = project3D(Math.cos(aE)*(rR+14), Math.sin(aE)*(rR+14), -8, rotX, rotY, 0, 400);
         const pB1 = project3D(Math.cos(aS)*(rR+14), Math.sin(aS)*(rR+14), -8, rotX, rotY, 0, 400);
-        neonPoly(ctx, [pF1, pF2, pB2, pB1], '#FFFFFF', { fillAlpha: 0.7, width: 1.5, glow: false, core: false });
+        ctx.beginPath();
+        ctx.moveTo(pF1.x, pF1.y); ctx.lineTo(pF2.x, pF2.y); ctx.lineTo(pB2.x, pB2.y); ctx.lineTo(pB1.x, pB1.y);
+        ctx.closePath(); ctx.fillStyle = 'rgba(255, 80, 0, 0.7)'; ctx.fill();
+        ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
     }
 
-    // Jagged Lightning Effect (pre-compute random radii ONCE for deterministic re-traces)
-    const lightningPts: {x:number, y:number}[] = [];
+    // Jagged Lightning Effect
+    ctx.beginPath();
     for (let i = 0; i <= 32; i++) {
         const ang = (i / 32) * Math.PI * 2 + (frame * 0.05);
         const rV = rR + 5 + (Math.random() - 0.5) * 18;
-        lightningPts.push(project3D(Math.cos(ang) * rV, Math.sin(ang) * rV, 0, rotX, rotY, 0, 400));
+        const p = project3D(Math.cos(ang) * rV, Math.sin(ang) * rV, 0, rotX, rotY, 0, 400);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
     }
-    neonStroke(ctx, (c) => {
-        c.moveTo(lightningPts[0].x, lightningPts[0].y);
-        for (let i = 1; i < lightningPts.length; i++) c.lineTo(lightningPts[i].x, lightningPts[i].y);
-    }, 'rgba(255, 255, 255, 0.8)', { width: 1.3 });
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
 
     // Telegraphing Lights (LOCK PHASE)
     if (e.state === 'LOCK') {
         const alpha = 0.5 + Math.sin(frame * 0.3) * 0.5;
-
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.shadowBlur = 10;
+        
+        ctx.lineWidth = 2 * alpha;
+        ctx.strokeStyle = `rgba(255, 50, 0, ${alpha * 0.8})`;
+        
         const focalLen = 400;
         const clipZ = 300; 
 
@@ -177,16 +183,13 @@ export const drawShango = (ctx: CanvasRenderingContext2D, e: Enemy, frame: numbe
             
             if (zStart <= clipZ) {
                  const pRing = project3D(cosA * rR, sinA * rR, 0, rotX, rotY, 0, focalLen);
-                 neonOrb(ctx, pRing.x, pRing.y, 8, '#FFFFFF', alpha);
+                 ctx.beginPath(); ctx.arc(pRing.x, pRing.y, 8, 0, Math.PI*2); ctx.fill();
             }
-
-            const prevAlpha = ctx.globalAlpha;
-            ctx.globalAlpha = prevAlpha * (alpha * 0.8);
-            neonStroke(ctx, (c) => {
-                c.moveTo(pS.x, pS.y);
-                c.lineTo(pE.x, pE.y);
-            }, '#FF3200', { width: 2 * alpha, glow: false, core: false });
-            ctx.globalAlpha = prevAlpha;
+            
+            ctx.beginPath(); 
+            ctx.moveTo(pS.x, pS.y); 
+            ctx.lineTo(pE.x, pE.y); 
+            ctx.stroke();
         }
     }
 

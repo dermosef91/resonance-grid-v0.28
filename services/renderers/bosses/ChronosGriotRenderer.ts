@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonPoly, neonOrb } from '../neonRender';
 
 export const drawChronosGriot = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     const auraSize = e.radius * (1.5 + Math.sin(frame * 0.05) * 0.1);
@@ -30,18 +29,18 @@ export const drawChronosGriot = (ctx: CanvasRenderingContext2D, e: Enemy, frame:
     ctx.translate(0, bob);
     
     const drawRing = (radius: number, rx: number, ry: number, rz: number, color: string) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
         const segments = 32;
-        const pts: {x:number, y:number}[] = [];
         for (let i = 0; i <= segments; i++) {
             const theta = (i / segments) * Math.PI * 2;
             const px = Math.cos(theta) * radius;
             const pz = Math.sin(theta) * radius;
-            pts.push(project3D(px, 0, pz, rx, ry, rz, 400));
+            const p = project3D(px, 0, pz, rx, ry, rz, 400); 
+            if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
         }
-        neonStroke(ctx, (c) => {
-            c.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
-        }, color, { width: 2 });
+        ctx.stroke();
     };
 
     const time = frame * 0.02;
@@ -65,14 +64,21 @@ export const drawChronosGriot = (ctx: CanvasRenderingContext2D, e: Enemy, frame:
     const pVerts = verts.map(v => project3D(v.x, v.y, v.z, coreRotX, coreRotY, 0, 400));
     const edges = [[0, 2], [0, 3], [0, 4], [0, 5], [1, 2], [1, 3], [1, 4], [1, 5], [2, 3], [3, 4], [4, 5], [5, 2]];
 
-    neonPoly(ctx, [pVerts[0], pVerts[2], pVerts[3]], '#FFAA00', { backingAlpha: 0.35, width: 2, glow: false, core: false });
-    neonPoly(ctx, [pVerts[0], pVerts[3], pVerts[4]], '#FFAA00', { backingAlpha: 0.35, width: 2, glow: false, core: false });
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.strokeStyle = '#FFAA00'; 
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath(); ctx.moveTo(pVerts[0].x, pVerts[0].y); ctx.lineTo(pVerts[2].x, pVerts[2].y); ctx.lineTo(pVerts[3].x, pVerts[3].y); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(pVerts[0].x, pVerts[0].y); ctx.lineTo(pVerts[3].x, pVerts[3].y); ctx.lineTo(pVerts[4].x, pVerts[4].y); ctx.closePath(); ctx.fill();
 
-    const coreSegs = edges.map(([i, j]) => [pVerts[i], pVerts[j]] as const);
-    neonStroke(ctx, (c) => {
-        coreSegs.forEach(([a, b]) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); });
-    }, '#FFAA00', { width: 2 });
+    ctx.beginPath();
+    edges.forEach(([i, j]) => {
+        ctx.moveTo(pVerts[i].x, pVerts[i].y);
+        ctx.lineTo(pVerts[j].x, pVerts[j].y);
+    });
+    ctx.stroke();
 
+    ctx.fillStyle = '#FFFFFF';
     const center = project3D(0, 0, 0, coreRotX, coreRotY, 0, 400);
-    neonOrb(ctx, center.x, center.y, 3, '#FFFFFF');
+    ctx.beginPath(); ctx.arc(center.x, center.y, 3, 0, Math.PI*2); ctx.fill();
 };

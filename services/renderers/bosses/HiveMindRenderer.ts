@@ -1,7 +1,6 @@
 
 import { Enemy } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonOrb } from '../neonRender';
 
 export const drawHiveMind = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     const t = frame * 0.01;
@@ -106,15 +105,16 @@ export const drawHiveMind = (ctx: CanvasRenderingContext2D, e: Enemy, frame: num
     ctx.lineCap = 'round';
 
     allEdges.forEach(e => {
-        if (e.depth >= 0) {
+        if (e.depth >= 0) { 
+            ctx.beginPath();
+            ctx.moveTo(e.p1.x, e.p1.y);
+            ctx.lineTo(e.p2.x, e.p2.y);
+            ctx.strokeStyle = e.color;
+            ctx.lineWidth = e.width * 0.8;
             ctx.globalAlpha = e.alpha * 0.3;
-            neonStroke(ctx, (c) => {
-                c.moveTo(e.p1.x, e.p1.y);
-                c.lineTo(e.p2.x, e.p2.y);
-            }, e.color, { width: e.width * 0.8, glow: false, core: false });
+            ctx.stroke();
         }
     });
-    ctx.globalAlpha = 1.0;
 
     if (centerP.depth < 50) {
         const glowSize = 30 * scale * centerP.scale * (1 + Math.sin(frame*0.2)*0.2);
@@ -126,19 +126,29 @@ export const drawHiveMind = (ctx: CanvasRenderingContext2D, e: Enemy, frame: num
     }
 
     allEdges.forEach(e => {
-        if (e.depth < 0) {
+        if (e.depth < 0) { 
+            ctx.beginPath();
+            ctx.moveTo(e.p1.x, e.p1.y);
+            ctx.lineTo(e.p2.x, e.p2.y);
+            ctx.strokeStyle = e.color;
+            ctx.lineWidth = e.width;
             ctx.globalAlpha = e.alpha;
-            neonStroke(ctx, (c) => {
-                c.moveTo(e.p1.x, e.p1.y);
-                c.lineTo(e.p2.x, e.p2.y);
-            }, e.color, { width: e.width, glow: e.width > 2, core: e.width > 2 });
+            if (e.width > 2) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = e.color;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
     });
     ctx.globalAlpha = 1.0;
 
     allNodes.forEach(n => {
         if (n.depth < 10) {
-            neonOrb(ctx, n.x, n.y, n.size, n.color);
+            ctx.fillStyle = n.color;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.size, 0, Math.PI*2);
+            ctx.fill();
         }
     });
 };

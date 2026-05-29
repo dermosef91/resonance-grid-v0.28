@@ -1,7 +1,6 @@
 
 import { Enemy, EnemyType } from '../../../types';
 import { project3D } from '../../renderUtils';
-import { neonStroke, neonOrb } from '../neonRender';
 
 // Helper for electric lines
 const drawElectricLine = (ctx: CanvasRenderingContext2D, p1: {x:number, y:number}, p2: {x:number, y:number}, color: string, lineWidth: number) => {
@@ -9,25 +8,26 @@ const drawElectricLine = (ctx: CanvasRenderingContext2D, p1: {x:number, y:number
     const dy = p2.y - p1.y;
     const dist = Math.sqrt(dx*dx + dy*dy);
     const steps = Math.max(2, Math.floor(dist / 15));
-
-    // Pre-compute jittered points ONCE so the neon trace can be replayed deterministically.
-    const pts: {x:number, y:number}[] = [{ x: p1.x, y: p1.y }];
+    
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    
     for(let i=1; i<steps; i++) {
         const t = i / steps;
         const perpX = -dy / dist;
         const perpY = dx / dist;
         const jitter = (Math.random() - 0.5) * 6;
-        pts.push({
-            x: p1.x + dx*t + perpX * jitter,
-            y: p1.y + dy*t + perpY * jitter,
-        });
+        
+        ctx.lineTo(
+            p1.x + dx*t + perpX * jitter, 
+            p1.y + dy*t + perpY * jitter
+        );
     }
-    pts.push({ x: p2.x, y: p2.y });
-
-    neonStroke(ctx, (c) => {
-        c.moveTo(pts[0].x, pts[0].y);
-        for(let i=1; i<pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
-    }, color, { width: lineWidth, glow: false, core: false });
+    
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
 };
 
 export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
@@ -75,29 +75,28 @@ export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
         ctx.fill();
 
         // 2. 3D Wireframe Rings
-        const ringAlpha = 0.5 + Math.sin(frame * 0.1) * 0.2;
+        ctx.strokeStyle = `rgba(255, 100, 100, ${0.5 + Math.sin(frame * 0.1) * 0.2})`;
+        ctx.lineWidth = 2;
+        // No shadowBlur here
+        
         const ringSegments = 32;
-
+        
         // Helper to draw a rotated circle
         const drawGreatCircle = (rx: number, ry: number, rz: number) => {
-            const pts: {x:number, y:number}[] = [];
+            ctx.beginPath();
             for(let i=0; i<=ringSegments; i++) {
                 const theta = (i/ringSegments) * Math.PI * 2;
                 // Circle on XY plane initially
                 const cx = Math.cos(theta) * shieldRadius;
                 const cy = Math.sin(theta) * shieldRadius;
                 const cz = 0;
-
+                
                 // Project with specific rotation for this ring
-                pts.push(project3D(cx, cy, cz, rx, ry, rz, 400));
+                const p = project3D(cx, cy, cz, rx, ry, rz, 400);
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
             }
-            const prevAlpha = ctx.globalAlpha;
-            ctx.globalAlpha = prevAlpha * ringAlpha;
-            neonStroke(ctx, (c) => {
-                c.moveTo(pts[0].x, pts[0].y);
-                for(let i=1; i<pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
-            }, '#FF6464', { width: 2 });
-            ctx.globalAlpha = prevAlpha;
+            ctx.stroke();
         };
 
         // Draw 3 orthogonal-ish rings rotating on different axes
@@ -137,7 +136,10 @@ export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
             });
 
             // Core Glow
-            neonOrb(ctx, center.x, center.y, scale * 0.4, coreColor);
+            ctx.fillStyle = coreColor;
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, scale * 0.4, 0, Math.PI*2);
+            ctx.fill();
 
         } else {
             // --- DRAW 8 SUB-CUBES (FRACTURED) ---
@@ -177,7 +179,10 @@ export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
 
             // Core (Only visible if expanded)
             if (expansion > 0.1) {
-                neonOrb(ctx, center.x, center.y, scale * 0.3 * expansion, coreColor);
+                ctx.fillStyle = coreColor;
+                ctx.beginPath();
+                ctx.arc(center.x, center.y, scale * 0.3 * expansion, 0, Math.PI*2);
+                ctx.fill();
             }
         }
 
@@ -225,7 +230,10 @@ export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
         });
         
         // Core
-        neonOrb(ctx, center.x, center.y, scale * 0.25, coreColor);
+        ctx.fillStyle = coreColor;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, scale * 0.25, 0, Math.PI*2);
+        ctx.fill();
 
     } else {
         // ORB (Icosahedron) - Supports OPEN (Split hemispheres)
@@ -285,7 +293,10 @@ export const drawTrinityPart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
             
             // Draw a bright cylinder/orb in center (No ShadowBlur)
             ctx.save();
-            neonOrb(ctx, center.x, center.y, coreS, '#FFFFFF');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, coreS, 0, Math.PI*2);
+            ctx.fill();
             ctx.restore();
             
             // Energy arcs between halves
