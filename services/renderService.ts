@@ -10,7 +10,6 @@ import { drawMissionEntity } from './renderers/MissionRenderer';
 import { drawAbyssalLoop } from './renderers/EffectRenderer';
 import { drawProjectiles } from './renderers/ProjectileRenderer';
 import { drawObstacle } from './renderers/ObstacleRenderer';
-import { getNeonQuality } from './renderers/neonRender';
 
 // --- Offscreen bloom buffer (cached across frames to avoid per-frame allocation) ---
 let bloomCanvas: HTMLCanvasElement | null = null;
@@ -36,14 +35,12 @@ const applyBloom = (ctx: CanvasRenderingContext2D, dpr: number) => {
         bloomCanvas.height = lowH;
     }
 
-    const high = getNeonQuality() === 'HIGH';
-
     // Bright-pass: emphasise highlights, then blur (in low-res space for a wide, cheap glow).
-    const blurPx = Math.max(1, Math.round((high ? 4 : 3) * dpr));
+    const blurPx = Math.max(1, Math.round(3 * dpr));
     bloomCtx.setTransform(1, 0, 0, 1, 0, 0);
     bloomCtx.globalCompositeOperation = 'source-over';
     bloomCtx.clearRect(0, 0, lowW, lowH);
-    bloomCtx.filter = `brightness(1.6) contrast(1.8) blur(${blurPx}px)`;
+    bloomCtx.filter = `brightness(1.5) contrast(1.7) blur(${blurPx}px)`;
     bloomCtx.drawImage(ctx.canvas, 0, 0, lowW, lowH);
     bloomCtx.filter = 'none';
 
@@ -51,19 +48,9 @@ const applyBloom = (ctx: CanvasRenderingContext2D, dpr: number) => {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
     ctx.imageSmoothingEnabled = true;
-
-    // Tight halo.
-    ctx.globalAlpha = high ? 0.55 : 0.45;
     ctx.drawImage(bloomCanvas, 0, 0, bw, bh);
-
-    // HIGH: a second, slightly up-scaled draw for a soft, wide gaussian-ish bloom.
-    if (high) {
-        const ox = bw * 0.04;
-        const oy = bh * 0.04;
-        ctx.globalAlpha = 0.28;
-        ctx.drawImage(bloomCanvas, -ox, -oy, bw + ox * 2, bh + oy * 2);
-    }
     ctx.restore();
 };
 
@@ -120,9 +107,9 @@ export const renderGame = (
     activeMissionType?: MissionType,
     glitchIntensity: number = 0,
     palette: ColorPalette = {
-        background: '#04040a',
+        background: '#050505',
         grid: '#ff6600',
-        nebulaPrimary: '#4a0044',
+        nebulaPrimary: '#40003c',
         nebulaSecondary: '#3c1400',
         landscape: {
             noiseScaleX: 0.002,

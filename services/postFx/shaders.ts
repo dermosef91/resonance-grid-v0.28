@@ -35,12 +35,10 @@ vec3 bloomSample(vec2 uv) {
     for (int i = 0; i < 8; i++) {
         float a = float(i) / 8.0 * 6.2831853;
         vec2 dir = vec2(cos(a), sin(a));
-        vec3 c1 = texture2D(uTex, uv + dir * px * 5.0).rgb;
-        vec3 c2 = texture2D(uTex, uv + dir * px * 11.0).rgb;
-        vec3 c3 = texture2D(uTex, uv + dir * px * 19.0).rgb;
-        sum += max(c1 - 0.5, 0.0);
-        sum += max(c2 - 0.5, 0.0) * 0.6;
-        sum += max(c3 - 0.5, 0.0) * 0.3;
+        vec3 c1 = texture2D(uTex, uv + dir * px * 4.0).rgb;
+        vec3 c2 = texture2D(uTex, uv + dir * px * 9.0).rgb;
+        sum += max(c1 - 0.55, 0.0);
+        sum += max(c2 - 0.55, 0.0) * 0.5;
     }
     return sum / 12.0;
 }

@@ -4,9 +4,9 @@ import { ColorPalette } from '../../types';
 // --- Biome Color Palettes ---
 export const BIOMES: Record<string, ColorPalette> = {
     DEFAULT: {
-        background: '#04040a', // Deep indigo-black for richer bloom falloff
+        background: '#050505',
         grid: '#ff6600', // Orange
-        nebulaPrimary: '#4a0044',
+        nebulaPrimary: '#40003c',
         nebulaSecondary: '#3c1400',
         landscape: {
             noiseScaleX: 0.002,
@@ -43,9 +43,9 @@ export const BIOMES: Record<string, ColorPalette> = {
         }
     },
     VOID: {
-        background: '#08000f',
+        background: '#0a000a',
         grid: '#b400ff', // Purple
-        nebulaPrimary: '#380050',
+        nebulaPrimary: '#300040',
         nebulaSecondary: '#100020',
         landscape: {
             noiseScaleX: 0.001, // Very long waves
