@@ -4,7 +4,7 @@ import { UpgradeOption, EnemyType, MissionType } from '../../types';
 import { ALL_ENEMIES_DB, generateRunWaves } from '../../services/gameData';
 import { OverlayContainer } from '../Common';
 import { audioEngine, MusicTheme } from '../../services/audioEngine';
-import { graphicsSettings, GraphicsSettingKey } from '../../services/graphicsSettings';
+import { graphicsSettings, GraphicsToggleKey } from '../../services/graphicsSettings';
 
 export const DebugMenu: React.FC<{
     generateOptions: () => UpgradeOption[],
@@ -124,7 +124,7 @@ export const DebugMenu: React.FC<{
 
     // Graphics feature toggles flip the live `graphicsSettings` singleton; the
     // render loop reads it every frame so changes are visible immediately.
-    const gfxToggles: { key: GraphicsSettingKey, label: string, desc: string }[] = [
+    const gfxToggles: { key: GraphicsToggleKey, label: string, desc: string }[] = [
         { key: 'postFx', label: 'WebGL Post-FX', desc: 'Bloom, color grade, CRT, glitch, freeze & damage flash' },
         { key: 'bloom', label: '2D Bloom', desc: 'Additive bright-pass glow on the Canvas frame' },
         { key: 'screenShake', label: 'Screen Shake', desc: 'Trauma-style directional camera kick' },
@@ -132,7 +132,28 @@ export const DebugMenu: React.FC<{
         { key: 'hiDpi', label: 'HiDPI Rendering', desc: 'Render at device pixel ratio for crisp edges' },
     ];
 
-    const renderGfxToggle = ({ key, label, desc }: { key: GraphicsSettingKey, label: string, desc: string }) => (
+    // Renderer selector: '3D' = real Three.js scene, '2D' = legacy Canvas neon.
+    const renderRendererToggle = () => {
+        const is3D = graphicsSettings.renderer === '3D';
+        return (
+            <button
+                className={`flex items-start justify-between gap-3 p-3 border text-left ${is3D ? 'border-cyan-500 bg-cyan-900/30' : 'border-orange-500 bg-orange-900/30'} hover:bg-gray-800`}
+                onClick={() => {
+                    graphicsSettings.renderer = is3D ? '2D' : '3D';
+                    window.dispatchEvent(new Event('resize'));
+                    setRefreshCounter(prev => prev + 1);
+                }}
+            >
+                <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold uppercase text-white">Renderer</span>
+                    <span className="text-[10px] text-gray-500 leading-tight mt-0.5">Real 3D (Three.js) vs legacy 2D Canvas neon</span>
+                </div>
+                <span className={`text-xs font-bold shrink-0 mt-0.5 ${is3D ? 'text-cyan-400' : 'text-orange-400'}`}>{is3D ? '3D' : '2D'}</span>
+            </button>
+        );
+    };
+
+    const renderGfxToggle = ({ key, label, desc }: { key: GraphicsToggleKey, label: string, desc: string }) => (
         <button
             key={key}
             className={`flex items-start justify-between gap-3 p-3 border text-left ${graphicsSettings[key] ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-900'} hover:bg-gray-800`}
@@ -352,6 +373,7 @@ export const DebugMenu: React.FC<{
                             <div className="text-green-700 font-bold mb-1 border-b border-gray-800">GRAPHICS FIDELITY</div>
                             <div className="text-[10px] text-gray-500 mb-1">Toggle the rendering features live. Useful for A/B comparison and for dropping effects on low-end devices.</div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {renderRendererToggle()}
                                 {gfxToggles.map(renderGfxToggle)}
                             </div>
                         </div>

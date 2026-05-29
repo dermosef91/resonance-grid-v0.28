@@ -8,6 +8,10 @@ import { POST_FX_ENABLED } from '../constants';
 // Seeded from the compile-time defaults so behaviour matches a fresh build
 // until the player overrides something.
 export const graphicsSettings = {
+    // Active renderer. '3D' = the real Three.js scene (perspective camera, meshes,
+    // lighting, UnrealBloom). '2D' = the legacy Canvas 2D neon renderer, kept as a
+    // live A/B fallback. Read every frame by the game loop.
+    renderer: '3D' as '2D' | '3D',
     postFx: POST_FX_ENABLED,  // WebGL post layer: highlight bloom, grade, CRT, glitch, freeze, flash
     bloom: true,              // Canvas 2D additive bright-pass bloom
     screenShake: true,        // Trauma-style directional screen shake
@@ -16,3 +20,5 @@ export const graphicsSettings = {
 };
 
 export type GraphicsSettingKey = keyof typeof graphicsSettings;
+// Keys that are simple on/off booleans (everything except the renderer selector).
+export type GraphicsToggleKey = Exclude<GraphicsSettingKey, 'renderer'>;
