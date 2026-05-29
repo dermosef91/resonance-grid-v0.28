@@ -15,7 +15,6 @@ import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
 import { audioEngine } from '../services/audioEngine';
 import { renderGame } from '../services/renderService';
-import { ThreeRenderer } from '../services/three/ThreeRenderer';
 import { lerpPaletteColors, parseColorToRgb } from '../services/renderUtils';
 import { BASE_WEAPONS, BASE_ARTIFACTS, getWavePalette } from '../services/gameData';
 import { saveMetaState } from '../services/persistence';
@@ -49,15 +48,11 @@ export const useGameEngine = (
     canvasRef: React.RefObject<HTMLCanvasElement>,
     metaState: MetaState,
     setMetaState: React.Dispatch<React.SetStateAction<MetaState>>,
-    glCanvasRef?: React.RefObject<HTMLCanvasElement>,
-    threeCanvasRef?: React.RefObject<HTMLCanvasElement>
+    glCanvasRef?: React.RefObject<HTMLCanvasElement>
 ) => {
     // WebGL post-processor (lazily created on first frame; null until then).
     const postFxRef = useRef<PostProcessor | null>(null);
     const postFxFailedRef = useRef(false);
-    // Real-3D Three.js renderer (lazily created on first 3D frame; null until then).
-    const threeRendererRef = useRef<ThreeRenderer | null>(null);
-    const threeFailedRef = useRef(false);
 
     // Destructure everything from the Game State Hook
     const gameState = useGameState(metaState);
@@ -1019,43 +1014,9 @@ export const useGameEngine = (
             while (accumulator >= FIXED_TIMESTEP) { if (status !== 'MENU') { if (status === 'PLAYING' && !showDebug) { if (hitStopRef.current > 0) hitStopRef.current--; else update(); } frameRef.current++; } accumulator -= FIXED_TIMESTEP; }
             if (glitchIntensityRef.current > 0.1) glitchIntensityRef.current *= 0.9; else glitchIntensityRef.current = 0;
 
-            if (status !== 'MENU') {
-                const dpr = (canvasRef.current ? canvasRef.current.height / Math.max(1, window.innerHeight) : 1) || 1;
-                const viewW = window.innerWidth;
-                const viewH = window.innerHeight;
-                const use3D = graphicsSettings.renderer === '3D' && !!threeCanvasRef?.current && !threeFailedRef.current;
-
-                // Show only the canvas stack the active renderer draws into.
-                if (canvasRef.current) canvasRef.current.style.display = use3D ? 'none' : 'block';
-                if (threeCanvasRef?.current) threeCanvasRef.current.style.display = use3D ? 'block' : 'none';
-
-                if (use3D) {
-                    if (!threeRendererRef.current) {
-                        try { threeRendererRef.current = new ThreeRenderer(threeCanvasRef!.current!); }
-                        catch (e) { threeFailedRef.current = true; console.error('3D renderer init failed; falling back to 2D', e); }
-                    }
-                    if (glCanvasRef?.current) glCanvasRef.current.style.display = 'none';
-                    threeRendererRef.current?.render({
-                        viewW, viewH, dpr,
-                        camera: cameraRef.current,
-                        player: playerRef.current,
-                        enemies: enemiesRef.current,
-                        projectiles: projectilesRef.current,
-                        pickups: pickupsRef.current,
-                        particles: particlesRef.current,
-                        missionEntities: missionEntitiesRef.current,
-                        replicas: replicasRef.current,
-                        obstacles: obstaclesRef.current,
-                        shockwaves: shockwavesRef.current,
-                        frame: frameRef.current,
-                        screenShake: screenShakeRef.current,
-                        palette: currentPaletteRef.current,
-                        isFrozen: enemyFreezeTimerRef.current > 0,
-                        waveId: waveIndexRef.current + 1,
-                    });
-                } else if (canvasRef.current) {
-                    const ctx = canvasRef.current.getContext('2d');
-                    if (ctx) {
+            if (canvasRef.current && status !== 'MENU') {
+                const ctx = canvasRef.current.getContext('2d');
+                if (ctx) {
                     let targets: { pos: { x: number, y: number }, color: string, label?: string }[] = [];
                     const m = missionRef.current;
                     if (m.type === MissionType.ELIMINATE || m.type === MissionType.RESCUE) { enemiesRef.current.forEach((e: any) => { if (e.isMissionTarget) targets.push({ pos: e.pos, color: '#ff0000' }); }); }
@@ -1137,7 +1098,6 @@ export const useGameEngine = (
                             redFlash: graphicsSettings.damageFlash ? Math.min(1, redFlashTimerRef.current / 15) : 0,
                             tint,
                         });
-                    }
                     }
                 }
             }

@@ -20,7 +20,6 @@ export const getRenderDpr = () =>
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const glCanvasRef = useRef<HTMLCanvasElement>(null);
-  const threeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [metaState, setMetaState] = useState<MetaState>(() => loadMetaState());
 
   const {
@@ -50,7 +49,7 @@ const App: React.FC = () => {
     augmentTarget,
     applyAugment,
     handleDebugPickup
-  } = useGameEngine(canvasRef, metaState, setMetaState, glCanvasRef, threeCanvasRef);
+  } = useGameEngine(canvasRef, metaState, setMetaState, glCanvasRef);
 
   // Size the game + post-processing canvases at devicePixelRatio for crisp HiDPI
   // rendering, and keep them in sync with viewport/orientation changes.
@@ -59,7 +58,7 @@ const App: React.FC = () => {
       const dpr = getRenderDpr();
       const w = window.innerWidth;
       const h = window.innerHeight;
-      for (const c of [canvasRef.current, glCanvasRef.current, threeCanvasRef.current]) {
+      for (const c of [canvasRef.current, glCanvasRef.current]) {
         if (!c) continue;
         c.width = Math.round(w * dpr);
         c.height = Math.round(h * dpr);
@@ -131,10 +130,6 @@ const App: React.FC = () => {
 
   return (
     <>
-      <canvas
-        ref={threeCanvasRef}
-        className="block fixed inset-0 bg-black touch-none"
-      />
       <canvas
         ref={canvasRef}
         className="block fixed inset-0 bg-black touch-none"

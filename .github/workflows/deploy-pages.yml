@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - claude/game-graphics-fidelity-RKygD
-      - claude/game-3d-remake-VDc6m
       - main
   workflow_dispatch:
 
