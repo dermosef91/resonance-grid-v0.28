@@ -21,23 +21,9 @@ export const GRAPHICS_QUALITY: GraphicsQuality = isMobile ? 'LOW' : 'HIGH';
 // Option 3: authored sprite render path. When on, entities with a generated
 // sprite (public/sprites/sprite-index.json) draw the PNG instead of the
 // procedural mesh; anything without a sprite falls back to procedural.
-// Default OFF. Can be enabled at runtime without a rebuild via the URL
-// (?sprites=1) or localStorage ('useSprites'='1') — handy for previewing the
-// generated test assets.
+// Default OFF until the sprite set is generated & reviewed.
 export const USE_SPRITES = false;
-const spritesFromEnv = (): boolean => {
-  if (USE_SPRITES) return true;
-  if (typeof window === 'undefined') return false;
-  try {
-    const q = new URLSearchParams(window.location.search).get('sprites');
-    if (q === '1' || q === 'true') return true;
-    if (q === '0' || q === 'false') return false;
-    return window.localStorage.getItem('useSprites') === '1';
-  } catch {
-    return false;
-  }
-};
-let _useSprites = spritesFromEnv();
+let _useSprites = USE_SPRITES;
 export const setUseSprites = (v: boolean) => { _useSprites = v; };
 export const getUseSprites = () => _useSprites;
 
