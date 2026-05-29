@@ -22,124 +22,36 @@ export const drawPlayerMesh = (
     ctx.globalAlpha = opacity;
     ctx.translate(x, y);
 
-    // Rotation
-    // Use custom pitch/yaw if provided (for replicas matching player movement)
-    // Otherwise fall back to idle animation
-    // NOTE: Mapping to project3D axes:
-    // rx (X-axis) = roll (Wobble)
-    // ry (Y-axis) = pitch (Rolling forward/back)
-    // rz (Z-axis) = yaw (Facing direction on screen)
-
-    const pitch = customPitch !== undefined ? customPitch : frame * 0.05;
     const yaw = customYaw !== undefined ? customYaw : Math.sin(frame * 0.02) * 0.2;
-    const roll = Math.cos(frame * 0.02) * 0.1;
-
-    // Helper for vertex distortion
-    const applyDistortion = (vx: number, vy: number, vz: number) => {
-        if (distortion <= 0) return { x: vx, y: vy, z: vz };
-        return {
-            x: vx + (Math.random() - 0.5) * distortion,
-            y: vy + (Math.random() - 0.5) * distortion,
-            z: vz + (Math.random() - 0.5) * distortion
-        };
-    };
-
-    // --- SHELL (Octahedron) ---
-    const sR = radius;
-    const shellVerts = [
-        { x: 0, y: 0, z: sR * 1.3 }, { x: 0, y: 0, z: -sR * 1.3 }, // Z axis tips
-        { x: sR, y: 0, z: 0 }, { x: -sR, y: 0, z: 0 }, // X axis tips
-        { x: 0, y: sR, z: 0 }, { x: 0, y: -sR, z: 0 }  // Y axis tips
+    ctx.rotate(yaw + Math.PI / 2);
+    const px = Math.max(2, Math.floor(radius / 5));
+    const thrustOn = Math.floor(frame / 8) % 2;
+    const shipRgb = parseColorToRgb(color) || { r: 255, g: 102, b: 0 };
+    const cl = (n: number) => Math.min(255, Math.max(0, n));
+    const hi = `rgb(${cl(shipRgb.r + 60)},${cl(shipRgb.g + 60)},${cl(shipRgb.b + 60)})`;
+    const sh = `rgb(${cl(shipRgb.r - 60)},${cl(shipRgb.g - 60)},${cl(shipRgb.b - 60)})`;
+    const ship: number[][] = [
+        [0,0,0,0,1,0,0,0,0],
+        [0,0,0,1,1,1,0,0,0],
+        [0,0,1,1,2,1,1,0,0],
+        [0,1,1,1,1,1,1,1,0],
+        [1,1,1,1,1,1,1,1,1],
+        [0,3,1,1,1,1,1,3,0],
+        [0,0,1,0,2,0,1,0,0],
+        [0,0,thrustOn ? 2 : 0,0,0,0,thrustOn ? 2 : 0,0,0],
     ];
-
-    const pShell = shellVerts.map(v => {
-        const d = applyDistortion(v.x, v.y, v.z);
-        // Correct Axis Mapping: roll (X), pitch (Y), yaw (Z)
-        return project3D(d.x, d.y, d.z, roll, pitch, yaw, 300);
-    });
-
-    const shellFaces = [
-        [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], // Top pyramid
-        [1, 2, 4], [1, 4, 3], [1, 3, 5], [1, 5, 2]  // Bottom pyramid
-    ];
-
-    // Sort by depth
-    const sortedShell = shellFaces.map(f => {
-        const v0 = pShell[f[0]]; const v1 = pShell[f[1]]; const v2 = pShell[f[2]];
-        const depth = (v0.depth + v1.depth + v2.depth) / 3;
-        return { v0, v1, v2, depth };
-    }).sort((a, b) => a.depth - b.depth);
-
-    // --- CORE (Icosahedron) ---
-    const coreScale = radius * 0.25;
-    const phi = 1.618;
-    const coreVerts = [
-        { x: 0, y: 1, z: phi }, { x: 0, y: 1, z: -phi }, { x: 0, y: -1, z: phi }, { x: 0, y: -1, z: -phi },
-        { x: 1, y: phi, z: 0 }, { x: 1, y: -phi, z: 0 }, { x: -1, y: phi, z: 0 }, { x: -1, y: -phi, z: 0 },
-        { x: phi, y: 0, z: 1 }, { x: phi, y: 0, z: -1 }, { x: -phi, y: 0, z: 1 }, { x: -phi, y: 0, z: -1 }
-    ];
-
-    // Core Spin Animation (Local)
-    const coreSpin = frame * 0.05;
-    const spinCos = Math.cos(coreSpin);
-    const spinSin = Math.sin(coreSpin);
-    const s = coreScale / 1.618;
-
-    const pCore = coreVerts.map(v => {
-        // Pre-rotate core vertices (Local Spin around Y axis)
-        const lx = v.x * spinCos - v.z * spinSin;
-        const lz = v.x * spinSin + v.z * spinCos;
-        const ly = v.y;
-
-        // Apply distortion to core
-        const d = applyDistortion(lx * s, ly * s, lz * s);
-
-        // Project with Player Orientation
-        return project3D(d.x, d.y, d.z, roll, pitch, yaw, 300);
-    });
-
-    const coreFaces = [
-        [0, 10, 2], [0, 2, 8], [0, 8, 4], [0, 4, 6], [0, 6, 10],
-        [3, 9, 5], [3, 5, 7], [3, 7, 11], [3, 11, 1], [3, 1, 9],
-        [2, 10, 7], [2, 7, 5], [2, 5, 8], [8, 5, 9], [8, 9, 4],
-        [4, 9, 1], [4, 1, 6], [6, 1, 11], [6, 11, 10], [10, 11, 7]
-    ];
-    const sortedCore = coreFaces.map(f => {
-        const v0 = pCore[f[0]]; const v1 = pCore[f[1]]; const v2 = pCore[f[2]];
-        const depth = (v0.depth + v1.depth + v2.depth) / 3;
-        return { v0, v1, v2, depth };
-    }).sort((a, b) => a.depth - b.depth);
-
-    // --- DRAW FUNCTIONS ---
-    // Glassy fresnel shell: near faces (depth >= 0) glow hotter than far ones.
-    const drawShellFace = (f: any) => {
-        const brightness = f.depth >= 0 ? 0.85 : 0.3;
-        neonPoly(ctx, [f.v0, f.v1, f.v2], wireframeColor, {
-            width: shellLineWidth,
-            fillAlpha: 0.08,
-            brightness,
-            backingAlpha: 0.35,
-        });
-    };
-
-    // Emissive hot core.
-    const drawCoreFace = (f: any) => {
-        const brightness = f.depth >= 0 ? 1.0 : 0.5;
-        neonPoly(ctx, [f.v0, f.v1, f.v2], color, {
-            width: 1,
-            fillAlpha: 0.35,
-            intensity: 1.2,
-            brightness,
-        });
-    };
-
-    // 1. Far Shell Faces
-    sortedShell.filter(f => f.depth < 0).forEach(drawShellFace);
-    // 2. Core
-    sortedCore.forEach(drawCoreFace);
-    // 3. Near Shell Faces
-    sortedShell.filter(f => f.depth >= 0).forEach(drawShellFace);
-
+    const rows = ship.length, cols = ship[0].length;
+    const offX = -Math.floor(cols / 2) * px, offY = -Math.floor(rows / 2) * px;
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const v = ship[row][col];
+            if (v === 1) ctx.fillStyle = color;
+            else if (v === 2) ctx.fillStyle = hi;
+            else if (v === 3) ctx.fillStyle = sh;
+            else continue;
+            ctx.fillRect(offX + col * px, offY + row * px, px - 1, px - 1);
+        }
+    }
     ctx.restore();
 };
 
@@ -328,21 +240,45 @@ export const drawPlayer = (
         });
     }
 
-    // Draw Player Body 
-    const scale = 22; const vertices = [{ x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 }, { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 }, { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 }];
-    const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
-    const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
-    faces.forEach(f => {
-        const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
-        // projectPlayer3D depth: smaller (negative) = nearer the camera.
-        const avgDepth = (v0.depth + v1.depth + v2.depth) / 3;
-        neonPoly(ctx, [v0, v1, v2], COLORS.white, {
-            width: 1.5,
-            fillAlpha: 0.08,
-            brightness: avgDepth < 0 ? 0.85 : 0.3,
-            backingAlpha: 0.35,
-        });
-    });
+    // Draw Player Body — pixel art ship
+    const projVerts = [
+        { x: 0, y: -22 }, { x: 0, y: 22 },
+        { x: 22, y: 0 }, { x: -22, y: 0 },
+        { x: 15, y: -10 }, { x: -15, y: -10 },
+    ];
+    {
+        const px = 4;
+        const thrustOn = Math.floor(frame / 8) % 2;
+        const shipRgb = parseColorToRgb(COLORS.orange) || { r: 255, g: 102, b: 0 };
+        const cl = (n: number) => Math.min(255, Math.max(0, n));
+        const hi = `rgb(${cl(shipRgb.r + 60)},${cl(shipRgb.g + 60)},${cl(shipRgb.b + 60)})`;
+        const sh = `rgb(${cl(shipRgb.r - 60)},${cl(shipRgb.g - 60)},${cl(shipRgb.b - 60)})`;
+        const ship: number[][] = [
+            [0,0,0,0,1,0,0,0,0],
+            [0,0,0,1,1,1,0,0,0],
+            [0,0,1,1,2,1,1,0,0],
+            [0,1,1,1,1,1,1,1,0],
+            [1,1,1,1,1,1,1,1,1],
+            [0,3,1,1,1,1,1,3,0],
+            [0,0,1,0,2,0,1,0,0],
+            [0,0,thrustOn ? 2 : 0,0,0,0,thrustOn ? 2 : 0,0,0],
+        ];
+        ctx.save();
+        ctx.rotate(yaw + Math.PI / 2);
+        const rows = ship.length, cols = ship[0].length;
+        const offX = -Math.floor(cols / 2) * px, offY = -Math.floor(rows / 2) * px;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const sv = ship[row][col];
+                if (sv === 1) ctx.fillStyle = COLORS.orange;
+                else if (sv === 2) ctx.fillStyle = hi;
+                else if (sv === 3) ctx.fillStyle = sh;
+                else continue;
+                ctx.fillRect(offX + col * px, offY + row * px, px - 1, px - 1);
+            }
+        }
+        ctx.restore();
+    }
 
     if (!isWeaponsJammed) {
         spiritCrystals.forEach(c => {

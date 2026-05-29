@@ -28,31 +28,77 @@ export const drawLancer = (ctx: CanvasRenderingContext2D, e: Enemy, frame: numbe
 
 export const drawDrone = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
-    ctx.scale(1 + Math.sin(frame * 0.1) * 0.1, 1 + Math.sin(frame * 0.1) * 0.1);
     ctx.rotate((e.rotation || 0) + Math.PI / 2);
 
     const isElite = e.enemyType === EnemyType.ELITE_DRONE;
-    const spin = frame * (isElite ? 0.1 : 0.05);
-    const tilt = Math.sin(frame * 0.05) * 0.2;
+    const px = Math.max(2, Math.floor(e.radius / 5));
+    const walkFrame = Math.floor(frame / 8) % 2;
+    const rgb = parseColorToRgb(e.color) || { r: 255, g: 102, b: 0 };
+    const cl = (n: number) => Math.min(255, Math.max(0, n));
+    const hi = `rgb(${cl(rgb.r + 60)},${cl(rgb.g + 60)},${cl(rgb.b + 60)})`;
+    const sh = `rgb(${cl(rgb.r - 60)},${cl(rgb.g - 60)},${cl(rgb.b - 60)})`;
 
-    let vertices: { x: number, y: number, z: number }[] = [];
-    let edges: number[][] = [];
+    const drawSprite = (sprite: number[][]) => {
+        const rows = sprite.length, cols = sprite[0].length;
+        const offX = -Math.floor(cols / 2) * px, offY = -Math.floor(rows / 2) * px;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const v = sprite[row][col];
+                if (v === 1) ctx.fillStyle = e.color;
+                else if (v === 2) ctx.fillStyle = hi;
+                else if (v === 3) ctx.fillStyle = sh;
+                else continue;
+                ctx.fillRect(offX + col * px, offY + row * px, px - 1, px - 1);
+            }
+        }
+    };
 
     if (isElite) {
-        const r = e.radius * 0.8; vertices = [{ x: 0, y: -r * 1.2, z: 0 }, { x: r, y: 0, z: 0 }, { x: 0, y: 0, z: r }, { x: -r, y: 0, z: 0 }, { x: 0, y: 0, z: -r }, { x: 0, y: r * 1.2, z: 0 }];
-        edges = [[0, 1], [0, 2], [0, 3], [0, 4], [5, 1], [5, 2], [5, 3], [5, 4], [1, 2], [2, 3], [3, 4], [4, 1]];
+        const spriteA: number[][] = [
+            [0,0,1,0,0,0,1,0,0],
+            [0,0,0,1,0,1,0,0,0],
+            [0,1,1,1,2,1,1,1,0],
+            [1,1,0,1,1,1,0,1,1],
+            [1,1,1,1,1,1,1,1,1],
+            [1,1,0,1,1,1,0,1,1],
+            [0,1,0,0,0,0,0,1,0],
+            [0,1,0,0,0,0,0,1,0],
+            [0,0,1,0,0,0,1,0,0],
+        ];
+        const spriteB: number[][] = [
+            [0,0,0,0,1,0,0,0,0],
+            [0,0,1,0,0,0,1,0,0],
+            [0,1,1,1,2,1,1,1,0],
+            [1,1,0,1,1,1,0,1,1],
+            [1,1,1,1,1,1,1,1,1],
+            [1,1,0,1,1,1,0,1,1],
+            [1,1,0,0,0,0,0,1,1],
+            [0,0,1,0,0,0,1,0,0],
+            [0,0,0,0,0,0,0,0,0],
+        ];
+        drawSprite(walkFrame === 0 ? spriteA : spriteB);
     } else {
-        const r = e.radius; vertices = [{ x: 0, y: -r, z: 0 }, { x: r * 0.7, y: r * 0.5, z: r * 0.7 }, { x: -r * 0.7, y: r * 0.5, z: r * 0.7 }, { x: 0, y: r * 0.5, z: -r * 0.7 }];
-        edges = [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [3, 1]];
+        const spriteA: number[][] = [
+            [0,1,0,0,0,1,0],
+            [0,0,1,0,1,0,0],
+            [0,1,1,2,1,1,0],
+            [1,1,0,1,0,1,1],
+            [1,1,1,1,1,1,1],
+            [0,1,1,0,1,1,0],
+            [1,0,0,0,0,0,1],
+        ];
+        const spriteB: number[][] = [
+            [0,1,0,0,0,1,0],
+            [1,0,0,0,0,0,1],
+            [0,1,1,2,1,1,0],
+            [1,1,0,1,0,1,1],
+            [1,1,1,1,1,1,1],
+            [1,1,0,0,0,1,1],
+            [0,1,0,0,0,1,0],
+        ];
+        drawSprite(walkFrame === 0 ? spriteA : spriteB);
     }
 
-    const segs: [Pt, Pt][] = edges.map(([i, j]) => [
-        project3D(vertices[i].x, vertices[i].y, vertices[i].z, tilt, spin, 0),
-        project3D(vertices[j].x, vertices[j].y, vertices[j].z, tilt, spin, 0),
-    ]);
-    neonStroke(ctx, edgeTrace(segs), e.color, { width: 2, intensity: isElite ? 1.1 : 0.9 });
-
-    neonOrb(ctx, 0, 0, isElite ? 4 : 2, isElite ? '#fff' : '#ffaa00', isElite ? 1.2 : 1);
     ctx.restore();
 };
 
@@ -145,39 +191,42 @@ export const drawTank = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number)
 };
 
 export const drawSwarmer = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    // 3D "Digital Swarm" Cloud
     ctx.save();
 
-    const count = 5;
-    const t = frame * 0.1;
-    const idSeed = e.id.charCodeAt(0); // Randomize per entity
+    const px = Math.max(2, Math.floor(e.radius / 4));
+    const idSeed = e.id ? e.id.charCodeAt(0) : 0;
+    const animFrame = Math.floor((frame + idSeed * 4) / 8) % 2;
+    const rgb = parseColorToRgb(e.color) || { r: 255, g: 0, b: 255 };
+    const cl = (n: number) => Math.min(255, Math.max(0, n));
+    const hi = `rgb(${cl(rgb.r + 60)},${cl(rgb.g + 60)},${cl(rgb.b + 60)})`;
 
-    // Base Rotation
-    const rotX = t + idSeed;
-    const rotY = t * 0.7;
+    const spriteA: number[][] = [
+        [1,0,1,0,1],
+        [0,1,1,1,0],
+        [1,1,2,1,1],
+        [0,1,0,1,0],
+        [0,0,1,0,0],
+    ];
+    const spriteB: number[][] = [
+        [0,1,0,1,0],
+        [1,1,1,1,1],
+        [1,1,2,1,1],
+        [0,1,0,1,0],
+        [0,0,1,0,0],
+    ];
 
-    // Draw 5 chaotic orbiting shards
-    for (let i = 0; i < count; i++) {
-        const offset = (i / count) * Math.PI * 2;
-
-        // Oscillation
-        const r = e.radius * (0.8 + Math.sin(t * 2 + offset) * 0.4);
-
-        const x = Math.cos(offset + t) * r;
-        const y = Math.sin(offset + t * 1.5) * r;
-        const z = Math.sin(offset * 2 + t) * r;
-
-        // Triangle Shard
-        const s = 4;
-        const v1 = project3D(x, y - s, z, rotX, rotY, 0, 200);
-        const v2 = project3D(x - s, y + s, z, rotX, rotY, 0, 200);
-        const v3 = project3D(x + s, y + s, z, rotX, rotY, 0, 200);
-
-        neonPoly(ctx, [v1, v2, v3], e.color, { width: 1, fillAlpha: 0.12, glow: false, core: false });
+    const sprite = animFrame === 0 ? spriteA : spriteB;
+    const rows = sprite.length, cols = sprite[0].length;
+    const offX = -Math.floor(cols / 2) * px, offY = -Math.floor(rows / 2) * px;
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const v = sprite[row][col];
+            if (v === 1) ctx.fillStyle = e.color;
+            else if (v === 2) ctx.fillStyle = hi;
+            else continue;
+            ctx.fillRect(offX + col * px, offY + row * px, px - 1, px - 1);
+        }
     }
-
-    // Core dot
-    neonOrb(ctx, 0, 0, 2, '#FFFFFF', 1);
 
     ctx.restore();
 };
