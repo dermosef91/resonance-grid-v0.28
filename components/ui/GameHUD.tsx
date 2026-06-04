@@ -201,7 +201,10 @@ export const GameHUD: React.FC<{
                             className="pointer-events-auto bg-black/50 hover:bg-gray-800 text-white border border-gray-600 w-8 h-8 flex items-center justify-center text-lg"
                             title="Pause"
                         >
-                            ⏸
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="opacity-90">
+                                <rect x="7" y="5" width="3.5" height="14" rx="1.25" />
+                                <rect x="13.5" y="5" width="3.5" height="14" rx="1.25" />
+                            </svg>
                         </button>
                     </div>
                     <CurrencyDisplay amount={uiStats.currency} size="xl" />
