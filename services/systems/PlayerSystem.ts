@@ -1,6 +1,7 @@
 
 import { Player, Vector2, MissionType } from '../../types';
 import { PLAYER_BASE_STATS, DASH } from '../../constants';
+import { graphicsSettings } from '../graphicsSettings';
 
 export const updatePlayer = (
     player: Player,
@@ -37,8 +38,8 @@ export const updatePlayer = (
         speedMod = 1.2; // +20% Speed
     }
 
-    // 3. Dash activation
-    if (dashInput?.requested && player.dashCooldown <= 0 && player.dashTimer <= 0) {
+    // 3. Dash activation (feature-flagged)
+    if (graphicsSettings.dashEnabled && dashInput?.requested && player.dashCooldown <= 0 && player.dashTimer <= 0) {
         let dir: Vector2;
         if (dashInput.mobileDir) {
             dir = dashInput.mobileDir;

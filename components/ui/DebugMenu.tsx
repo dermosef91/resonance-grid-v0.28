@@ -132,6 +132,10 @@ export const DebugMenu: React.FC<{
         { key: 'hiDpi', label: 'HiDPI Rendering', desc: 'Render at device pixel ratio for crisp edges' },
     ];
 
+    const featureToggles: { key: GraphicsSettingKey, label: string, desc: string }[] = [
+        { key: 'dashEnabled', label: 'Dash Ability [WIP]', desc: 'Space + dir (PC) / double-tap (mobile) — invulnerable burst with melee damage & 2s cooldown' },
+    ];
+
     const renderGfxToggle = ({ key, label, desc }: { key: GraphicsSettingKey, label: string, desc: string }) => (
         <button
             key={key}
@@ -353,6 +357,10 @@ export const DebugMenu: React.FC<{
                             <div className="text-[10px] text-gray-500 mb-1">Toggle the rendering features live. Useful for A/B comparison and for dropping effects on low-end devices.</div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gfxToggles.map(renderGfxToggle)}
+                            </div>
+                            <div className="text-orange-500 font-bold mt-4 mb-1 border-b border-gray-800">EXPERIMENTAL FEATURES</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {featureToggles.map(renderGfxToggle)}
                             </div>
                         </div>
                     )}

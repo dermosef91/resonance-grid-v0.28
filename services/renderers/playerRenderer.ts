@@ -1,6 +1,7 @@
 
 import { Player, MissionType } from '../../types';
 import { COLORS, DASH } from '../../constants';
+import { graphicsSettings } from '../graphicsSettings';
 import { project3D, parseColorToRgb } from '../renderUtils';
 
 export const drawPlayerMesh = (
@@ -155,8 +156,8 @@ export const drawPlayer = (
         }
     }
 
-    // Dash body tint: ghostly fade-in/out during dash
-    if (player.dashTimer > 0) {
+    // Dash body tint: ghostly fade-in/out during dash (feature-flagged)
+    if (graphicsSettings.dashEnabled && player.dashTimer > 0) {
         const dashFade = player.dashTimer / DASH.DURATION;
         ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.35 + dashFade * 0.65);
     }
@@ -544,16 +545,18 @@ export const drawPlayer = (
 
     drawDiegeticArc(xpPct, 50, -Math.PI * 0.25, Math.PI * 0.25, xpCol, xpWidth, xpGlow);
 
-    // Dash cooldown arc (top slot: 45° to 135°, fills as cooldown charges back up)
-    const dashReady = player.dashCooldown <= 0 && player.dashTimer <= 0;
-    const dashPct = player.dashTimer > 0 ? 1.0
-        : player.dashCooldown > 0 ? (1 - player.dashCooldown / DASH.COOLDOWN)
-        : 1.0;
-    const dashArcColor = player.dashTimer > 0 ? '#FFFFFF'
-        : dashReady ? COLORS.orange
-        : 'rgba(255,102,0,0.7)';
-    const dashGlow = player.dashTimer > 0 || dashReady;
-    drawDiegeticArc(dashPct, 50, Math.PI * 0.25, Math.PI * 0.75, dashArcColor, 3, dashGlow);
+    // Dash cooldown arc (top slot: 45° to 135°) — only when feature is enabled
+    if (graphicsSettings.dashEnabled) {
+        const dashReady = player.dashCooldown <= 0 && player.dashTimer <= 0;
+        const dashPct = player.dashTimer > 0 ? 1.0
+            : player.dashCooldown > 0 ? (1 - player.dashCooldown / DASH.COOLDOWN)
+            : 1.0;
+        const dashArcColor = player.dashTimer > 0 ? '#FFFFFF'
+            : dashReady ? COLORS.orange
+            : 'rgba(255,102,0,0.7)';
+        const dashGlow = player.dashTimer > 0 || dashReady;
+        drawDiegeticArc(dashPct, 50, Math.PI * 0.25, Math.PI * 0.75, dashArcColor, 3, dashGlow);
+    }
 
     ctx.restore();
 };

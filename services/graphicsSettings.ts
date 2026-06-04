@@ -13,6 +13,7 @@ export const graphicsSettings = {
     screenShake: true,        // Trauma-style directional screen shake
     damageFlash: true,        // Red radial flash when the player takes damage
     hiDpi: true,              // Render at devicePixelRatio for crisp HiDPI output
+    dashEnabled: false,       // Directional dash ability (WIP — off by default)
 };
 
 export type GraphicsSettingKey = keyof typeof graphicsSettings;
