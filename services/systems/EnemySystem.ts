@@ -185,6 +185,9 @@ export const updateEnemies = (
             }
         }
 
+        // Fault-Line Burrower deals no contact damage while submerged.
+        if (enemy.customData?.submerged) isHit = false;
+
         if (isHit) {
             // Apply Damage only if I-frames are inactive
             if (player.invulnerabilityTimer <= 0) {

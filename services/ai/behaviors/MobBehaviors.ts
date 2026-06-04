@@ -367,7 +367,345 @@ export class MonolithBehavior implements IEnemyBehavior {
         
         // Rotation for visual effect (slow spin)
         enemy.rotation = (enemy.rotation || 0) + 0.005;
-        
+
+        return result;
+    }
+}
+
+// --- BRAINSTORM ROSTER (v0.28) ---
+
+// Support unit: hovers at range, never attacks, pulses a regen aura onto allies.
+export class SankofaTotemBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player, ctx: AIContext): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+
+        const HOVER = 320;
+        if (dist > HOVER + 60) {
+            result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        } else if (dist < HOVER - 60) {
+            result.velocity = { x: -Math.cos(angle) * enemy.speed, y: -Math.sin(angle) * enemy.speed };
+        } else {
+            const dir = (enemy.id.charCodeAt(0) % 2 === 0) ? 1 : -1;
+            const oa = angle + (Math.PI / 2) * dir;
+            result.velocity = { x: Math.cos(oa) * enemy.speed * 0.6, y: Math.sin(oa) * enemy.speed * 0.6 };
+        }
+
+        enemy.rotation = (enemy.rotation || 0) + 0.012;
+        enemy.attackTimer++;
+
+        const AURA = 320;
+        if (enemy.attackTimer % 30 === 0 && ctx.allEnemies) {
+            for (const ally of ctx.allEnemies) {
+                if (ally.id === enemy.id || ally.markedForDeletion) continue;
+                if (ally.enemyType === EnemyType.SANKOFA_TOTEM || ally.isBoss) continue;
+                const adx = ally.pos.x - enemy.pos.x;
+                const ady = ally.pos.y - enemy.pos.y;
+                if (adx * adx + ady * ady > AURA * AURA) continue;
+                if (ally.health < ally.maxHealth) {
+                    ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.04);
+                    if (Math.random() < 0.25) {
+                        result.newParticles.push(createTextParticle({ x: ally.pos.x, y: ally.pos.y - ally.radius - 8 }, "+", '#FFAA33', 22));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+}
+
+// Blink assassin: hops toward the player, leaving a damaging shard at the old spot.
+export class KintsugiWraithBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+
+        result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        enemy.rotation = (enemy.rotation || 0) + 0.15;
+        enemy.attackTimer++;
+
+        if (enemy.attackTimer >= 70) {
+            enemy.attackTimer = 0;
+            // Leave a lingering gold shard hazard where we were standing.
+            result.newProjectiles.push(getProjectile({
+                id: `kintsugi_${enemy.id}_${Math.random()}`,
+                type: EntityType.PROJECTILE,
+                pos: { x: enemy.pos.x, y: enemy.pos.y },
+                velocity: { x: 0, y: 0 },
+                radius: 22,
+                color: '#FFB000',
+                markedForDeletion: false,
+                damage: enemy.damage,
+                duration: 70,
+                pierce: 999,
+                knockback: 0,
+                isEnemy: true
+            }));
+            result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y }, "✦", '#FFB000', 30));
+            // Teleport hop toward the player (don't overshoot).
+            const hop = Math.min(140, dist - enemy.radius);
+            if (hop > 0) {
+                enemy.pos.x += Math.cos(angle) * hop;
+                enemy.pos.y += Math.sin(angle) * hop;
+            }
+        }
+        return result;
+    }
+}
+
+// Gravity well: slow drift, continuously drags the player inward (consumed in EnemySystem).
+export class CalabashVoidBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+
+        enemy.gravityPull = 10; // EnemySystem applies the inward force on the player.
+        enemy.rotation = (enemy.rotation || 0) + 0.01;
+        result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        return result;
+    }
+}
+
+// Mobile spawner: drifts at range, cracks open to release Swarmers, then seals.
+export class AnansiBroodPodBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player, ctx: AIContext): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+
+        enemy.attackTimer++;
+        enemy.customData = enemy.customData || {};
+        const opening = enemy.attackTimer > 120;
+        enemy.customData.open = opening;
+        enemy.state = opening ? 'ATTACK' : 'IDLE';
+
+        // Hold a mid-range distance while alive.
+        if (dist > 340) result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        else if (dist < 240) result.velocity = { x: -Math.cos(angle) * enemy.speed, y: -Math.sin(angle) * enemy.speed };
+
+        enemy.rotation = (enemy.rotation || 0) + 0.01;
+
+        if (enemy.attackTimer >= 150) {
+            enemy.attackTimer = 0;
+            const broodCount = 3;
+            for (let i = 0; i < broodCount; i++) {
+                const a = (i / broodCount) * Math.PI * 2;
+                const spawnPos = { x: enemy.pos.x + Math.cos(a) * (enemy.radius + 4), y: enemy.pos.y + Math.sin(a) * (enemy.radius + 4) };
+                const baby = ctx.spawnEnemy(player, EnemyType.SWARMER, spawnPos);
+                result.newEnemies.push(baby);
+            }
+            result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - enemy.radius }, "HATCH", '#FF8800', 26));
+        }
+        return result;
+    }
+}
+
+// Resource leech: kites at range, drains via a beam, heals itself.
+export class SankofaSiphonBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+        enemy.rotation = angle;
+
+        const MIN = 360;
+        const MAX = 520;
+        if (dist < MIN) {
+            result.velocity = { x: -Math.cos(angle) * enemy.speed, y: -Math.sin(angle) * enemy.speed };
+        } else if (dist > MAX) {
+            result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        } else {
+            const dir = (enemy.id.charCodeAt(0) % 2 === 0) ? 1 : -1;
+            const oa = angle + (Math.PI / 2) * dir;
+            result.velocity = { x: Math.cos(oa) * enemy.speed * 0.8, y: Math.sin(oa) * enemy.speed * 0.8 };
+        }
+
+        // Drain beam while in feeding range.
+        if (dist < 620) {
+            enemy.state = 'ATTACK';
+            result.newProjectiles.push(getProjectile({
+                id: `siphon_${enemy.id}`,
+                type: EntityType.PROJECTILE,
+                pos: { x: enemy.pos.x, y: enemy.pos.y },
+                velocity: { x: 0, y: 0 },
+                radius: 2,
+                color: '#FFC400',
+                markedForDeletion: false,
+                damage: 8,
+                duration: 1,
+                pierce: 999,
+                knockback: 0,
+                isEnemy: true,
+                beamData: { angle, length: dist, width: 5, tickRate: 30 }
+            }));
+            // Heal itself as it feeds.
+            enemy.health = Math.min(enemy.maxHealth, enemy.health + 0.6);
+        } else {
+            enemy.state = 'IDLE';
+        }
+        return result;
+    }
+}
+
+// Rhythm-gated armor: invulnerable except during the brief heartbeat flare.
+export class ObsidianHeartBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+
+        result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        enemy.rotation = (enemy.rotation || 0) + 0.01;
+        enemy.attackTimer++;
+
+        const beat = Math.sin(enemy.attackTimer * 0.05);
+        enemy.customData = enemy.customData || {};
+        enemy.customData.vulnerable = beat > 0.7; // ~18% of the cycle
+        enemy.state = enemy.customData.vulnerable ? 'FLARE' : 'IDLE';
+        return result;
+    }
+}
+
+// Mimic: shadows the player and periodically fires a volley back.
+export class MirrorDjinnBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+        enemy.rotation = angle;
+        enemy.attackTimer++;
+
+        // Approach with a mirrored lateral sway.
+        const sway = Math.sin(enemy.attackTimer * 0.06);
+        const perp = angle + Math.PI / 2;
+        result.velocity = {
+            x: Math.cos(angle) * enemy.speed * 0.7 + Math.cos(perp) * sway * enemy.speed,
+            y: Math.sin(angle) * enemy.speed * 0.7 + Math.sin(perp) * sway * enemy.speed
+        };
+
+        if (enemy.attackTimer % 90 === 0 && dist < 650) {
+            const weaponColor = (player.weapons && player.weapons[0] && (player.weapons[0] as any).color) || '#E0E0F0';
+            for (let i = -1; i <= 1; i++) {
+                const a = angle + i * 0.18;
+                result.newProjectiles.push(getProjectile({
+                    id: `djinn_${enemy.id}_${Math.random()}`,
+                    type: EntityType.PROJECTILE,
+                    pos: { x: enemy.pos.x, y: enemy.pos.y },
+                    velocity: { x: Math.cos(a) * 9, y: Math.sin(a) * 9 },
+                    radius: 5,
+                    color: weaponColor,
+                    markedForDeletion: false,
+                    damage: enemy.damage,
+                    duration: 100,
+                    pierce: 0,
+                    knockback: 0,
+                    isEnemy: true
+                }));
+            }
+        }
+        return result;
+    }
+}
+
+// Untargetable ambush: burrows beneath the grid, surfaces to lunge, re-burrows.
+export class FaultLineBurrowerBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.customData = enemy.customData || {};
+        enemy.attackTimer++;
+
+        if (enemy.attackTimer < 120) {
+            // SUBMERGED: untargetable, faster approach, faint crack visual.
+            enemy.customData.submerged = true;
+            enemy.opacity = 0.2;
+            enemy.state = 'PHASE_OUT';
+            enemy.rotation = angle;
+            result.velocity = { x: Math.cos(angle) * enemy.speed * 2.2, y: Math.sin(angle) * enemy.speed * 2.2 };
+            if (enemy.attackTimer === 119) enemy.customData.lungeAngle = angle; // lock aim
+        } else if (enemy.attackTimer < 165) {
+            // SURFACED LUNGE: vulnerable, bursts along the locked direction.
+            enemy.customData.submerged = false;
+            enemy.opacity = 1;
+            enemy.state = 'CHARGE';
+            const la = enemy.customData.lungeAngle ?? angle;
+            enemy.rotation = la;
+            result.velocity = { x: Math.cos(la) * enemy.speed * 4.5, y: Math.sin(la) * enemy.speed * 4.5 };
+        } else {
+            enemy.attackTimer = 0;
+        }
+        return result;
+    }
+}
+
+// Area denial: wanders erratically, laying a trail of lingering damage zones.
+export class DatamoshCorruptorBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.attackTimer++;
+
+        // Erratic drift toward the player.
+        const wobble = Math.sin(enemy.attackTimer * 0.13) * 0.8;
+        const a = angle + wobble;
+        result.velocity = { x: Math.cos(a) * enemy.speed, y: Math.sin(a) * enemy.speed };
+        enemy.rotation = (enemy.rotation || 0) + 0.05;
+
+        if (enemy.attackTimer % 25 === 0) {
+            result.newProjectiles.push(getProjectile({
+                id: `datamosh_${enemy.id}_${Math.random()}`,
+                type: EntityType.PROJECTILE,
+                pos: { x: enemy.pos.x, y: enemy.pos.y },
+                velocity: { x: 0, y: 0 },
+                radius: 26,
+                color: '#F0F0F0',
+                markedForDeletion: false,
+                damage: Math.round(enemy.damage * 0.6),
+                duration: 150,
+                pierce: 999,
+                knockback: 0,
+                isEnemy: true
+            }));
+        }
+        return result;
+    }
+}
+
+// Directional shield: advances while keeping its shield facing the player.
+export class AegisPhalanxBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+
+        // Smoothly rotate to face the player (CollisionSystem reads enemy.rotation).
+        let cur = enemy.rotation || 0;
+        let diff = angle - cur;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        enemy.rotation = cur + Math.max(-0.06, Math.min(0.06, diff));
+
+        result.velocity = { x: Math.cos(enemy.rotation) * enemy.speed, y: Math.sin(enemy.rotation) * enemy.speed };
         return result;
     }
 }

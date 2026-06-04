@@ -2,10 +2,14 @@
 import { EnemyType } from '../../types';
 import { IEnemyBehavior } from './types';
 import { DefaultBehavior, OrbitalBehavior } from './behaviors/CommonBehaviors';
-import { 
-    SentinelBehavior, GhostBehavior, LaserLotusBehavior, 
+import {
+    SentinelBehavior, GhostBehavior, LaserLotusBehavior,
     LancerBehavior, OrbitalSniperBehavior, UtatuBehavior,
-    MandelbrotBehavior, MonolithBehavior
+    MandelbrotBehavior, MonolithBehavior,
+    SankofaTotemBehavior, KintsugiWraithBehavior, CalabashVoidBehavior,
+    AnansiBroodPodBehavior, SankofaSiphonBehavior, ObsidianHeartBehavior,
+    MirrorDjinnBehavior, FaultLineBurrowerBehavior, DatamoshCorruptorBehavior,
+    AegisPhalanxBehavior
 } from './behaviors/MobBehaviors';
 import { 
     BossVanguardBehavior, BossHiveMindBehavior, BossCyberKrakenBehavior, 
@@ -25,6 +29,18 @@ export const EnemyBehaviors: Record<string, IEnemyBehavior> = {
     // New Enemies
     [EnemyType.MANDELBROT_MITE]: new MandelbrotBehavior(),
     [EnemyType.PRISMATIC_MONOLITH]: new MonolithBehavior(),
+
+    // Brainstorm Roster (v0.28)
+    [EnemyType.SANKOFA_TOTEM]: new SankofaTotemBehavior(),
+    [EnemyType.KINTSUGI_WRAITH]: new KintsugiWraithBehavior(),
+    [EnemyType.CALABASH_VOID]: new CalabashVoidBehavior(),
+    [EnemyType.ANANSI_BROOD_POD]: new AnansiBroodPodBehavior(),
+    [EnemyType.SANKOFA_SIPHON]: new SankofaSiphonBehavior(),
+    [EnemyType.OBSIDIAN_HEART]: new ObsidianHeartBehavior(),
+    [EnemyType.MIRROR_DJINN]: new MirrorDjinnBehavior(),
+    [EnemyType.FAULT_LINE_BURROWER]: new FaultLineBurrowerBehavior(),
+    [EnemyType.DATAMOSH_CORRUPTOR]: new DatamoshCorruptorBehavior(),
+    [EnemyType.AEGIS_PHALANX]: new AegisPhalanxBehavior(),
     
     // Orbital Shared
     [EnemyType.SWARMER]: new OrbitalBehavior(),

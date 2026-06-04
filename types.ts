@@ -65,6 +65,18 @@ export enum EnemyType {
   UTATU = 'UTATU', // New Enemy: Utatu
   FERROFLUID_SLIME = 'FERROFLUID_SLIME', // New: Merging Blob
 
+  // --- BRAINSTORM ROSTER (v0.28) ---
+  SANKOFA_TOTEM = 'SANKOFA_TOTEM',       // Support: heals nearby enemies
+  KINTSUGI_WRAITH = 'KINTSUGI_WRAITH',   // Blink assassin leaving hazard shards
+  CALABASH_VOID = 'CALABASH_VOID',       // Gravity well, drags player inward
+  ANANSI_BROOD_POD = 'ANANSI_BROOD_POD', // Mobile spawner, releases Swarmers
+  SANKOFA_SIPHON = 'SANKOFA_SIPHON',     // Resource leech / kiter
+  OBSIDIAN_HEART = 'OBSIDIAN_HEART',     // Rhythm-gated armor
+  MIRROR_DJINN = 'MIRROR_DJINN',         // Mimic, fires volleys back
+  FAULT_LINE_BURROWER = 'FAULT_LINE_BURROWER', // Untargetable ambush
+  DATAMOSH_CORRUPTOR = 'DATAMOSH_CORRUPTOR',   // Area denial trail
+  AEGIS_PHALANX = 'AEGIS_PHALANX',       // Directional front shield
+
   // --- PHYSICS / METAPHYSICS ENEMIES ---
   MANDELBROT_MITE = 'MANDELBROT_MITE',
   PRISMATIC_MONOLITH = 'PRISMATIC_MONOLITH',
