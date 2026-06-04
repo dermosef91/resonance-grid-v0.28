@@ -16,6 +16,7 @@ export const MASS: Record<string, number> = {
     [EnemyType.INFERNO_SPINNER]: 12,
     [EnemyType.BINARY_SENTINEL]: 15,
     [EnemyType.TANK]: 30,
+    [EnemyType.ASASE_COLOSSUS]: 35, // Seismic heavy
     [EnemyType.PRISMATIC_MONOLITH]: 100, // Very Heavy
     [EnemyType.LASER_LOTUS]: 300,
     [EnemyType.UTATU]: 25,
@@ -66,6 +67,10 @@ export const ALL_ENEMIES_DB = [
     {
         type: EnemyType.TANK, name: "Tank", hp: 600, speed: 1.2, damage: 50, xp: 30, radius: 45, color: '#ff6600',
         desc: "High health, slow movement. Resistant to knockback.", waves: "5, 8, 10", included: true
+    },
+    {
+        type: EnemyType.ASASE_COLOSSUS, name: "Asase Colossus", hp: 520, speed: 1.0, damage: 45, xp: 35, radius: 42, color: '#FF6600',
+        desc: "Earthen heavy that plants its feet and slams the ground, erupting a ring of shockwaves.", waves: "11, 13", included: true
     },
     {
         type: EnemyType.GHOST, name: "Phase Stalker", hp: 20, speed: 2, damage: 35, xp: 15, radius: 16, color: '#ff00ff',

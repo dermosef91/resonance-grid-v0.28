@@ -8,7 +8,8 @@ import {
     MandelbrotBehavior, MonolithBehavior,
     SankofaTotemBehavior, KintsugiWraithBehavior, CalabashVoidBehavior,
     AnansiBroodPodBehavior, SankofaSiphonBehavior, ObsidianHeartBehavior,
-    MirrorDjinnBehavior, DatamoshCorruptorBehavior
+    MirrorDjinnBehavior, DatamoshCorruptorBehavior,
+    EliteDroneBehavior, NeonCobraBehavior, AsaseColossusBehavior
 } from './behaviors/MobBehaviors';
 import { 
     BossVanguardBehavior, BossHiveMindBehavior, BossCyberKrakenBehavior, 
@@ -20,6 +21,9 @@ export type { IEnemyBehavior, AIContext, AIResult } from './types';
 export const EnemyBehaviors: Record<string, IEnemyBehavior> = {
     [EnemyType.SENTINEL]: new SentinelBehavior(),
     [EnemyType.GHOST]: new GhostBehavior(),
+    [EnemyType.ELITE_DRONE]: new EliteDroneBehavior(),
+    [EnemyType.NEON_COBRA]: new NeonCobraBehavior(),
+    [EnemyType.ASASE_COLOSSUS]: new AsaseColossusBehavior(),
     [EnemyType.LASER_LOTUS]: new LaserLotusBehavior(),
     [EnemyType.LANCER]: new LancerBehavior(),
     [EnemyType.ORBITAL_SNIPER]: new OrbitalSniperBehavior(),

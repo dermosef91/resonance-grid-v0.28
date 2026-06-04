@@ -8,11 +8,19 @@ export class DefaultBehavior implements IEnemyBehavior {
         const dx = player.pos.x - enemy.pos.x;
         const dy = player.pos.y - enemy.pos.y;
         const angle = Math.atan2(dy, dx);
-        
+
         enemy.rotation = angle;
+
+        // Elite Drone rally buff: temporarily boosts nearby basic Drones.
+        let speed = enemy.speed;
+        if (enemy.customData && enemy.customData.buffFrames > 0) {
+            enemy.customData.buffFrames--;
+            speed *= 1.4;
+        }
+
         return {
             ...createEmptyResult(),
-            velocity: { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed }
+            velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }
         };
     }
 }

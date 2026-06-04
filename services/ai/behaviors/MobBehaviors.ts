@@ -147,7 +147,10 @@ export class GhostBehavior implements IEnemyBehavior {
         const angle = Math.atan2(dy, dx);
 
         enemy.attackTimer++;
-        if (enemy.attackTimer < 80) { 
+        // Telegraph the imminent phase-out in the final frames before vanishing.
+        enemy.customData = enemy.customData || {};
+        enemy.customData.telegraph = enemy.attackTimer >= 70 && enemy.attackTimer < 80;
+        if (enemy.attackTimer < 80) {
             enemy.opacity = 1;
             enemy.speed = 2.25; 
             result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
@@ -598,8 +601,14 @@ export class MirrorDjinnBehavior implements IEnemyBehavior {
             y: Math.sin(angle) * enemy.speed * 0.7 + Math.sin(perp) * sway * enemy.speed
         };
 
+        enemy.customData = enemy.customData || {};
+        if (enemy.customData.flash > 0) enemy.customData.flash--;
+
         if (enemy.attackTimer % 90 === 0 && dist < 650) {
             const weaponColor = (player.weapons && player.weapons[0] && (player.weapons[0] as any).color) || '#E0E0F0';
+            // Telegraph the mirrored volley: flash the stolen weapon colour.
+            enemy.customData.flash = 12;
+            enemy.customData.weaponColor = weaponColor;
             for (let i = -1; i <= 1; i++) {
                 const a = angle + i * 0.18;
                 result.newProjectiles.push(getProjectile({
@@ -652,6 +661,113 @@ export class DatamoshCorruptorBehavior implements IEnemyBehavior {
                 knockback: 0,
                 isEnemy: true
             }));
+        }
+        return result;
+    }
+}
+
+// Squad commander: chases like a drone but periodically rallies nearby basic Drones, briefly boosting their speed.
+export class EliteDroneBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player, ctx: AIContext): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.rotation = angle;
+        result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+
+        enemy.attackTimer++;
+        enemy.customData = enemy.customData || {};
+        if (enemy.customData.rally > 0) enemy.customData.rally--;
+
+        const RALLY_RAD = 280;
+        if (enemy.attackTimer % 45 === 0 && ctx.allEnemies) {
+            enemy.customData.rally = 14; // drives the commander ring glow in the renderer
+            for (const ally of ctx.allEnemies) {
+                if (ally.id === enemy.id || ally.markedForDeletion) continue;
+                if (ally.enemyType !== EnemyType.DRONE) continue;
+                const adx = ally.pos.x - enemy.pos.x;
+                const ady = ally.pos.y - enemy.pos.y;
+                if (adx * adx + ady * ady > RALLY_RAD * RALLY_RAD) continue;
+                ally.customData = ally.customData || {};
+                ally.customData.buffFrames = 90; // consumed in DefaultBehavior
+                if (Math.random() < 0.15) {
+                    result.newParticles.push(createTextParticle({ x: ally.pos.x, y: ally.pos.y - ally.radius - 6 }, "▲", '#FF5500', 18));
+                }
+            }
+        }
+        return result;
+    }
+}
+
+// Serpentine pursuer: chases the player with a winding lateral weave (matches its "winding movement" flavour).
+export class NeonCobraBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.attackTimer++;
+
+        const sway = Math.sin(enemy.attackTimer * 0.18) * 0.9;
+        const perp = angle + Math.PI / 2;
+        const vx = Math.cos(angle) * enemy.speed + Math.cos(perp) * sway * enemy.speed;
+        const vy = Math.sin(angle) * enemy.speed + Math.sin(perp) * sway * enemy.speed;
+        result.velocity = { x: vx, y: vy };
+        // Orient the serpent along its actual slither direction.
+        enemy.rotation = Math.atan2(vy, vx);
+        return result;
+    }
+}
+
+// Seismic heavy: lumbers forward, plants its feet to telegraph, then slams a radial shockwave nova.
+export class AsaseColossusBehavior implements IEnemyBehavior {
+    update(enemy: Enemy, player: Player): AIResult {
+        const result = createEmptyResult();
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.rotation = angle;
+        enemy.attackTimer++;
+        enemy.customData = enemy.customData || {};
+
+        const CYCLE = 160;
+        const WINDUP = 30;
+        const phase = enemy.attackTimer % CYCLE;
+        const winding = phase >= CYCLE - WINDUP;
+        enemy.customData.winding = winding;
+
+        if (winding) {
+            // Plant feet and telegraph the slam.
+            enemy.state = 'CHARGE';
+            result.velocity = { x: Math.cos(angle) * enemy.speed * 0.1, y: Math.sin(angle) * enemy.speed * 0.1 };
+        } else {
+            enemy.state = 'IDLE';
+            result.velocity = { x: Math.cos(angle) * enemy.speed, y: Math.sin(angle) * enemy.speed };
+        }
+
+        // SLAM at the top of the cycle: radial shockwave nova.
+        if (phase === 0 && enemy.attackTimer > 0) {
+            const count = 12;
+            for (let i = 0; i < count; i++) {
+                const a = (i / count) * Math.PI * 2;
+                result.newProjectiles.push(getProjectile({
+                    id: `asase_${enemy.id}_${i}_${Math.random()}`,
+                    type: EntityType.PROJECTILE,
+                    pos: { x: enemy.pos.x, y: enemy.pos.y },
+                    velocity: { x: Math.cos(a) * 4.5, y: Math.sin(a) * 4.5 },
+                    radius: 12,
+                    color: '#FF6600',
+                    markedForDeletion: false,
+                    damage: enemy.damage,
+                    duration: 90,
+                    pierce: 0,
+                    knockback: 6,
+                    isEnemy: true
+                }));
+            }
+            result.screenShake = 8;
+            result.newParticles.push(createTextParticle({ x: enemy.pos.x, y: enemy.pos.y - enemy.radius }, "SLAM", '#FF6600', 30));
         }
         return result;
     }
