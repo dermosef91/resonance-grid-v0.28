@@ -67,10 +67,13 @@ export const drawMissionEntity = (
         // Progress Arc (Solid overlay tracking completion)
         if (progress > 0) {
             ctx.beginPath();
-            ctx.arc(0, 0, e.radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * progress));
+            ctx.arc(0, 0, e.radius + 6, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * progress));
             ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 8;
+            ctx.shadowColor = '#FFFFFF';
+            ctx.shadowBlur = 18;
             ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
         ctx.restore();
