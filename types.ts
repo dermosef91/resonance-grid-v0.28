@@ -47,6 +47,7 @@ export interface Shockwave {
 export enum EnemyType {
   DRONE = 'DRONE',       // Basic
   TANK = 'TANK',         // Slow, tanky
+  ASASE_COLOSSUS = 'ASASE_COLOSSUS', // Seismic heavy: telegraphed ground-slam nova
   SWARMER = 'SWARMER',   // Fast, weak
   ELITE_DRONE = 'ELITE_DRONE', // Faster, stronger drone
   SENTINEL = 'SENTINEL', // Stationary shooter

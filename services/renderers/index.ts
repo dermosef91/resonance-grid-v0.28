@@ -15,7 +15,7 @@ import {
     drawMandelbrotMite, drawPrismaticMonolith,
     drawSankofaTotem, drawKintsugiWraith, drawCalabashVoid,
     drawAnansiBroodPod, drawSankofaSiphon, drawObsidianHeart,
-    drawMirrorDjinn, drawDatamoshCorruptor
+    drawMirrorDjinn, drawDatamoshCorruptor, drawAsaseColossus
 } from './mobRenderers';
 
 type Renderer = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => void;
@@ -40,6 +40,7 @@ export const EnemyRenderRegistry: Record<string, Renderer> = {
     [EnemyType.SENTINEL]: drawSentinel,
     [EnemyType.GHOST]: drawGhost,
     [EnemyType.TANK]: drawTank,
+    [EnemyType.ASASE_COLOSSUS]: drawAsaseColossus,
     [EnemyType.SWARMER]: drawSwarmer,
     [EnemyType.NEON_COBRA]: drawNeonCobra,
     [EnemyType.INFERNO_SPINNER]: drawInfernoSpinner,

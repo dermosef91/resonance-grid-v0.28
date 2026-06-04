@@ -86,7 +86,9 @@ export const drawDrone = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
             project3D(rVerts[k].x, rVerts[k].y, rVerts[k].z, tilt, ringSpin, 0),
             project3D(rVerts[(k + 1) % RING_PTS].x, rVerts[(k + 1) % RING_PTS].y, rVerts[(k + 1) % RING_PTS].z, tilt, ringSpin, 0),
         ]);
-        neonStroke(ctx, edgeTrace(rSegs), '#FF5500', { width: 1.5, intensity: 0.6 });
+        // Commander ring flares while rallying nearby Drones.
+        const rallying = (e.customData?.rally || 0) > 0;
+        neonStroke(ctx, edgeTrace(rSegs), rallying ? '#ffffff' : '#FF5500', { width: rallying ? 2.5 : 1.5, intensity: rallying ? 1.2 : 0.6 });
     }
 
     ctx.restore();
@@ -132,21 +134,6 @@ export const drawSentinel = (ctx: CanvasRenderingContext2D, e: Enemy, frame: num
 export const drawGhost = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     const opacity = e.opacity ?? 1;
 
-    if (opacity < 0.5) {
-        // Stealth Mode Visuals: Rare sparkles to hint location
-        if (Math.random() < 0.2) {
-            ctx.save();
-            ctx.globalAlpha = 0.4;
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 1;
-            const r = e.radius * (0.8 + Math.random() * 0.4);
-            ctx.beginPath();
-            ctx.arc((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, r, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-    }
-
     // Pre-compute the wavy outline once so the layered neon passes line up.
     const ghostPts: Pt[] = [];
     for (let i = 0; i < 8; i++) {
@@ -154,9 +141,34 @@ export const drawGhost = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
         const r = e.radius * (0.8 + Math.random() * 0.4);
         ghostPts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
     }
+
+    // Stealth Mode: leave a directional afterimage smear so the phase is readable.
+    if (opacity < 0.5) {
+        const vx = e.velocity?.x || 0;
+        const vy = e.velocity?.y || 0;
+        const vMag = Math.hypot(vx, vy) || 1;
+        const ux = vx / vMag, uy = vy / vMag;
+        ctx.save();
+        for (let k = 1; k <= 3; k++) {
+            const off = k * e.radius * 0.5;
+            ctx.globalAlpha = 0.14 / k;
+            neonPoly(ctx, ghostPts.map(p => ({ x: p.x - ux * off, y: p.y - uy * off })), e.color, { width: 1.5, fillAlpha: 0, intensity: 0.6, glow: false, core: false });
+        }
+        ctx.restore();
+    }
+
     ctx.globalAlpha = opacity;
     neonPoly(ctx, ghostPts, e.color, { width: 2, fillAlpha: 0.06, intensity: 0.9 });
     ctx.globalAlpha = 1;
+
+    // Telegraph: bright pulsing ring in the final frames before the phase-out.
+    if (e.customData?.telegraph) {
+        const pulse = 0.55 + Math.sin(frame * 0.5) * 0.45;
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        neonStroke(ctx, (c) => c.arc(0, 0, e.radius * 1.35, 0, Math.PI * 2), '#FFFFFF', { width: 2, intensity: 1.2 });
+        ctx.restore();
+    }
 };
 
 export const drawTank = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
@@ -445,9 +457,26 @@ export const drawUtatu = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
         });
     });
 
-    // If attacking (linked), glow brighter
-    if (e.state === 'ATTACK') {
-        neonOrb(ctx, 0, 0, 4, '#FFFFFF', 1.4);
+    // Glowing tether-anchor nodes at each vertex — the link mounts.
+    const linked = e.state === 'ATTACK';
+    const nodePulse = linked ? 1.2 + Math.sin(frame * 0.4) * 0.4 : 0.7;
+    projected.forEach(v => {
+        neonOrb(ctx, v.x, v.y, linked ? 3.5 : 2, linked ? '#FFFFFF' : '#9900FF', nodePulse);
+    });
+
+    // If attacking (linked), charge up: brighter core + short jittered tether stubs.
+    if (linked) {
+        neonOrb(ctx, 0, 0, 4 + Math.sin(frame * 0.3) * 1.5, '#FFFFFF', 1.4);
+        ctx.save();
+        neonStroke(ctx, (c) => {
+            for (const v of projected) {
+                const jx = (Math.random() - 0.5) * 6;
+                const jy = (Math.random() - 0.5) * 6;
+                c.moveTo(0, 0);
+                c.lineTo(v.x * 1.4 + jx, v.y * 1.4 + jy);
+            }
+        }, '#CC66FF', { width: 1, glow: false, core: false });
+        ctx.restore();
     }
 
     ctx.restore();
@@ -897,26 +926,98 @@ export const drawMirrorDjinn = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
     ctx.save();
     ctx.rotate(e.rotation || 0);
     const r = e.radius;
-    // Chrome doppelganger silhouette.
     const body: Pt[] = [{ x: 0, y: -r * 1.1 }, { x: r * 0.7, y: 0 }, { x: 0, y: r * 1.1 }, { x: -r * 0.7, y: 0 }];
-    neonPoly(ctx, body, e.color, { width: 2, fillAlpha: 0.1, backingAlpha: 0.6 });
+
+    // Chrome doppelganger: a faint shimmering mirror echo offset to one side.
+    const shimmer = Math.sin(frame * 0.12) * r * 0.18;
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    neonPoly(ctx, body.map(p => ({ x: p.x + shimmer, y: p.y })), e.color, { width: 1, fillAlpha: 0, intensity: 0.5, glow: false, core: false });
+    ctx.restore();
+
+    // Flash the stolen weapon colour as it fires the mirrored volley.
+    const flash = e.customData?.flash || 0;
+    const weaponColor = e.customData?.weaponColor || e.color;
+    const bodyColor = flash > 0 ? weaponColor : e.color;
+
+    neonPoly(ctx, body, bodyColor, { width: 2, fillAlpha: flash > 0 ? 0.25 : 0.1, backingAlpha: 0.6, intensity: flash > 0 ? 1.3 : 1 });
     neonStroke(ctx, (c) => { c.moveTo(0, -r * 1.1); c.lineTo(0, r * 1.1); }, '#ffffff', { width: 1.5, intensity: 1.2 });
     neonOrb(ctx, -r * 0.25, -r * 0.2, 2, '#ffffff', 1);
+
+    // Expanding ripple ring in the weapon colour on the fire beat.
+    if (flash > 0) {
+        const t = 1 - flash / 12; // 0 -> 1 over the flash window
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        neonStroke(ctx, (c) => c.arc(0, 0, r * (1 + t * 1.6), 0, Math.PI * 2), weaponColor, { width: 2, intensity: 1.2, glow: false });
+        ctx.restore();
+    }
     ctx.restore();
 };
 
 export const drawDatamoshCorruptor = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
     const r = e.radius;
-    // Smeared, glitching corruption block.
+    const t = e.attackTimer || frame;
+    // Pre-drop pulse: the block strains brighter right before it lays a hazard tile (25-frame cadence).
+    const toDrop = 25 - (t % 25);
+    const charge = toDrop <= 5 ? (1 - toDrop / 5) : 0;
+
+    // Smeared, glitching corruption block — frame-driven scroll instead of pure noise.
     for (let i = 0; i < 5; i++) {
-        const ox = (Math.random() - 0.5) * r * 1.5;
+        const ox = Math.sin((t + i * 9) * 0.2) * r * (0.7 + charge * 0.5);
         const oy = (i - 2) * r * 0.4;
-        const w = r * (0.8 + Math.random() * 0.8);
-        const col = i % 2 === 0 ? '#F0F0F0' : '#FF6600';
-        neonStroke(ctx, (c) => c.rect(ox - w / 2, oy - r * 0.18, w, r * 0.36), col, { width: 1.5, glow: false, core: false });
+        const w = r * (0.8 + (0.5 + 0.5 * Math.sin((t * 0.3) + i)) * 0.8);
+        const col = ((i + Math.floor(t * 0.15)) % 2 === 0) ? '#F0F0F0' : '#FF6600';
+        neonStroke(ctx, (c) => c.rect(ox - w / 2, oy - r * 0.18, w, r * 0.36), col, { width: 1.5 + charge, glow: charge > 0, core: false, intensity: 1 + charge });
     }
-    neonOrb(ctx, 0, 0, 3, '#FF6600', 1);
+    neonOrb(ctx, 0, 0, 3 + charge * 4, '#FF6600', 1 + charge);
+    ctx.restore();
+};
+
+// Seismic heavy: an earthen hexagonal colossus whose seams flare as it winds up a ground slam.
+export const drawAsaseColossus = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    const r = e.radius;
+    const winding = !!e.customData?.winding;
+    const traceHex = (rad: number, rot: number) => (c: CanvasRenderingContext2D) => {
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + rot;
+            const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
+            if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+        }
+        c.closePath();
+    };
+
+    // Charge term ramps the seam glow up during the wind-up telegraph.
+    const charge = winding ? 0.5 + Math.sin(frame * 0.5) * 0.5 : 0;
+
+    // Heavy earthen body: dark backing + neon hull.
+    ctx.fillStyle = 'rgba(4, 2, 0, 0.88)';
+    ctx.beginPath(); traceHex(r, Math.PI / 6)(ctx); ctx.fill();
+    neonStroke(ctx, traceHex(r, Math.PI / 6), COLORS.orange, { width: 2.5, intensity: 1 + charge });
+    neonStroke(ctx, traceHex(r * 0.6, Math.PI / 6), '#cc5200', { width: 1, glow: false, core: false });
+
+    // Glowing seams from core to each corner — widen/brighten as it winds up.
+    const seamSegs: [Pt, Pt][] = [];
+    for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        seamSegs.push([{ x: 0, y: 0 }, { x: Math.cos(a) * r, y: Math.sin(a) * r }]);
+    }
+    neonStroke(ctx, edgeTrace(seamSegs), winding ? '#ffaa00' : '#aa3300', { width: 1 + charge * 2, glow: charge > 0, core: false, intensity: 0.5 + charge });
+
+    // Molten core.
+    neonOrb(ctx, 0, 0, 5 + charge * 5, '#FF6600', 1 + charge);
+
+    // Expanding ground-ring flash for the first few frames after a slam.
+    const slamPhase = (e.attackTimer || 0) % 160;
+    if (slamPhase < 8 && (e.attackTimer || 0) >= 160) {
+        const tt = slamPhase / 8;
+        ctx.save();
+        ctx.globalAlpha = 1 - tt;
+        neonStroke(ctx, (c) => c.arc(0, 0, r * (1.2 + tt * 1.6), 0, Math.PI * 2), '#FFAA00', { width: 3, intensity: 1.4, glow: false });
+        ctx.restore();
+    }
     ctx.restore();
 };
 
