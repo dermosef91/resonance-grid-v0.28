@@ -700,26 +700,6 @@ export class EliteDroneBehavior implements IEnemyBehavior {
     }
 }
 
-// Serpentine pursuer: chases the player with a winding lateral weave (matches its "winding movement" flavour).
-export class NeonCobraBehavior implements IEnemyBehavior {
-    update(enemy: Enemy, player: Player): AIResult {
-        const result = createEmptyResult();
-        const dx = player.pos.x - enemy.pos.x;
-        const dy = player.pos.y - enemy.pos.y;
-        const angle = Math.atan2(dy, dx);
-        enemy.attackTimer++;
-
-        const sway = Math.sin(enemy.attackTimer * 0.18) * 0.9;
-        const perp = angle + Math.PI / 2;
-        const vx = Math.cos(angle) * enemy.speed + Math.cos(perp) * sway * enemy.speed;
-        const vy = Math.sin(angle) * enemy.speed + Math.sin(perp) * sway * enemy.speed;
-        result.velocity = { x: vx, y: vy };
-        // Orient the serpent along its actual slither direction.
-        enemy.rotation = Math.atan2(vy, vx);
-        return result;
-    }
-}
-
 // Seismic heavy: lumbers forward, plants its feet to telegraph, then slams a radial shockwave nova.
 export class AsaseColossusBehavior implements IEnemyBehavior {
     update(enemy: Enemy, player: Player): AIResult {
