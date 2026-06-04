@@ -631,23 +631,121 @@ export const drawPrismaticMonolith = (ctx: CanvasRenderingContext2D, e: Enemy, f
 export const drawSankofaTotem = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
     const r = e.radius;
-    // Expanding "sound-ring" aura pulses.
-    const t = frame * 0.04;
+    const t = frame * 0.025;
+    const breathe = 0.85 + Math.sin(frame * 0.045) * 0.15;
+
+    // Broken ancestral-energy aura: segmented arcs with gaps, crackling outward
     for (let i = 0; i < 3; i++) {
-        const phase = (t + i / 3) % 1;
-        const rr = r + phase * 90;
-        neonStroke(ctx, (c) => c.arc(0, 0, rr, 0, Math.PI * 2), e.color, { width: 1.5, intensity: (1 - phase) * 0.5, glow: false, core: false });
+        const phase = (t * 0.55 + i / 3) % 1;
+        const rr = r * 1.1 + phase * 85;
+        const alpha = (1 - phase) * 0.45;
+        neonStroke(ctx, (c) => {
+            for (let s = 0; s < 8; s++) {
+                const a0 = (s / 8) * Math.PI * 2;
+                const a1 = ((s + 0.6) / 8) * Math.PI * 2;
+                c.moveTo(rr * Math.cos(a0), rr * Math.sin(a0));
+                c.arc(0, 0, rr, a0, a1);
+            }
+        }, e.color, { width: 1, intensity: alpha, glow: false, core: false });
     }
-    ctx.rotate(Math.sin(frame * 0.02) * 0.1);
-    // Carved mask.
+
+    // Slow, ponderous sway
+    ctx.rotate(Math.sin(frame * 0.014) * 0.07);
+
+    // Stake / plinth base — driven into the ground
+    neonStroke(ctx, (c) => {
+        c.moveTo(-r * 0.14, r * 1.1);
+        c.lineTo(0, r * 1.52);
+        c.lineTo(r * 0.14, r * 1.1);
+    }, e.color, { width: 2, intensity: 0.55, glow: false });
+
+    // Crown horns — branching prongs referencing the Sankofa bird silhouette
+    neonStroke(ctx, (c) => {
+        c.moveTo(-r * 0.22, -r * 1.05);
+        c.lineTo(-r * 0.52, -r * 1.65);
+        c.lineTo(-r * 0.18, -r * 1.2);
+    }, e.color, { width: 1.5, intensity: 1.0 });
+    neonStroke(ctx, (c) => {
+        c.moveTo( r * 0.22, -r * 1.05);
+        c.lineTo( r * 0.52, -r * 1.65);
+        c.lineTo( r * 0.18, -r * 1.2);
+    }, e.color, { width: 1.5, intensity: 1.0 });
+    neonOrb(ctx, 0, -r * 1.35, 2.5, e.color, 1.1);
+
+    // Main mask body: 14-point polygon with cheek notches for depth
     const maskPts: Pt[] = [
-        { x: 0, y: -r * 1.1 }, { x: r * 0.7, y: -r * 0.6 }, { x: r * 0.6, y: r * 0.5 },
-        { x: 0, y: r * 1.1 }, { x: -r * 0.6, y: r * 0.5 }, { x: -r * 0.7, y: -r * 0.6 }
+        { x:  0,         y: -r * 1.35 },
+        { x:  r * 0.28,  y: -r * 1.05 },
+        { x:  r * 0.62,  y: -r * 0.58 },
+        { x:  r * 0.72,  y: -r * 0.1  },
+        { x:  r * 0.55,  y:  r * 0.28 },
+        { x:  r * 0.68,  y:  r * 0.62 },
+        { x:  r * 0.42,  y:  r * 1.05 },
+        { x:  0,         y:  r * 1.12 },
+        { x: -r * 0.42,  y:  r * 1.05 },
+        { x: -r * 0.68,  y:  r * 0.62 },
+        { x: -r * 0.55,  y:  r * 0.28 },
+        { x: -r * 0.72,  y: -r * 0.1  },
+        { x: -r * 0.62,  y: -r * 0.58 },
+        { x: -r * 0.28,  y: -r * 1.05 },
     ];
-    neonPoly(ctx, maskPts, e.color, { width: 2, fillAlpha: 0.08, backingAlpha: 0.6 });
-    neonOrb(ctx, -r * 0.3, -r * 0.15, 3, '#ffffff', 1.2);
-    neonOrb(ctx, r * 0.3, -r * 0.15, 3, '#ffffff', 1.2);
-    neonStroke(ctx, (c) => { c.moveTo(-r * 0.3, r * 0.45); c.lineTo(r * 0.3, r * 0.45); }, '#ffffff', { width: 1.5, glow: false });
+    neonPoly(ctx, maskPts, e.color, { width: 2.5, fillAlpha: 0.07, backingAlpha: 0.82 });
+
+    // Brow ridge — heavy angular furrow conveying menace
+    neonStroke(ctx, (c) => {
+        c.moveTo(-r * 0.62, -r * 0.28);
+        c.lineTo(-r * 0.32, -r * 0.48);
+        c.lineTo(-r * 0.06, -r * 0.42);
+    }, e.color, { width: 2, intensity: 0.9 });
+    neonStroke(ctx, (c) => {
+        c.moveTo( r * 0.62, -r * 0.28);
+        c.lineTo( r * 0.32, -r * 0.48);
+        c.lineTo( r * 0.06, -r * 0.42);
+    }, e.color, { width: 2, intensity: 0.9 });
+
+    // Eye sockets — dark hollow pits
+    const eyeY = -r * 0.12;
+    const exL = -r * 0.33, exR = r * 0.33;
+    const eW = r * 0.2, eH = r * 0.25;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(2, 2, 6, 0.94)';
+    ctx.beginPath(); ctx.ellipse(exL, eyeY, eW, eH, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(exR, eyeY, eW, eH, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    neonStroke(ctx, (c) => { c.ellipse(exL, eyeY, eW, eH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 1.0 });
+    neonStroke(ctx, (c) => { c.ellipse(exR, eyeY, eW, eH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 1.0 });
+    // Burning ember pupils — deep orange-red, pulsing
+    neonOrb(ctx, exL, eyeY, eW * 0.42 * breathe, '#FF3300', 1.6);
+    neonOrb(ctx, exR, eyeY, eW * 0.42 * breathe, '#FF3300', 1.6);
+
+    // Nasal bridge — angular V-notch
+    neonStroke(ctx, (c) => {
+        c.moveTo(-r * 0.1, -r * 0.08);
+        c.lineTo(0, r * 0.1);
+        c.lineTo(r * 0.1, -r * 0.08);
+    }, e.color, { width: 1.2, intensity: 0.45, glow: false, core: false });
+
+    // Mouth — gaping void with 5 tooth dividers
+    const mY = r * 0.5, mW = r * 0.44, mH = r * 0.165;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(2, 2, 6, 0.94)';
+    ctx.beginPath(); ctx.ellipse(0, mY, mW, mH, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    neonStroke(ctx, (c) => { c.ellipse(0, mY, mW, mH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 0.88 });
+    for (let ti = 0; ti < 5; ti++) {
+        const tx = -mW * 0.72 + (ti / 4) * mW * 1.44;
+        neonStroke(ctx, (c) => { c.moveTo(tx, mY - mH * 0.88); c.lineTo(tx, mY + mH * 0.88); }, '#ffffff', { width: 0.8, intensity: 0.42, glow: false, core: false });
+    }
+
+    // Cheek scarification — 3 parallel diagonal cuts per side
+    for (let si = 0; si < 3; si++) {
+        const sy = -r * 0.06 + si * r * 0.2;
+        neonStroke(ctx, (c) => { c.moveTo(-r * 0.66, sy - r * 0.04); c.lineTo(-r * 0.4, sy + r * 0.04); }, e.color, { width: 1, intensity: 0.36, glow: false, core: false });
+        neonStroke(ctx, (c) => { c.moveTo( r * 0.66, sy - r * 0.04); c.lineTo( r * 0.4, sy + r * 0.04); }, e.color, { width: 1, intensity: 0.36, glow: false, core: false });
+    }
+
     ctx.restore();
 };
 
