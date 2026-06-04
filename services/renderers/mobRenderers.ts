@@ -53,6 +53,42 @@ export const drawDrone = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
     neonStroke(ctx, edgeTrace(segs), e.color, { width: 2, intensity: isElite ? 1.1 : 0.9 });
 
     neonOrb(ctx, 0, 0, isElite ? 4 : 2, isElite ? '#fff' : '#ffaa00', isElite ? 1.2 : 1);
+
+    if (!isElite) {
+        // Orbiting thruster nodes — 2 energy pods flanking the body
+        const orbitR = e.radius * 1.6;
+        const orbitAngle = frame * 0.07;
+        for (let i = 0; i < 2; i++) {
+            const a = orbitAngle + i * Math.PI;
+            neonOrb(ctx, Math.cos(a) * orbitR, Math.sin(a) * orbitR, 3, '#ffaa00', 0.7);
+        }
+    } else {
+        // Counter-rotating inner tetrahedron — white core spinning opposite the shell
+        const ri = e.radius * 0.55;
+        const innerSpin = -spin * 1.5;
+        const iVerts = [{ x: 0, y: -ri, z: 0 }, { x: ri * 0.7, y: ri * 0.5, z: ri * 0.7 }, { x: -ri * 0.7, y: ri * 0.5, z: ri * 0.7 }, { x: 0, y: ri * 0.5, z: -ri * 0.7 }];
+        const iEdges = [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [3, 1]];
+        const iSegs: [Pt, Pt][] = iEdges.map(([a, b]) => [
+            project3D(iVerts[a].x, iVerts[a].y, iVerts[a].z, tilt, innerSpin, 0),
+            project3D(iVerts[b].x, iVerts[b].y, iVerts[b].z, tilt, innerSpin, 0),
+        ]);
+        neonStroke(ctx, edgeTrace(iSegs), '#ffffff', { width: 1.5, intensity: 0.8 });
+
+        // Equatorial glow ring — saucer halo spinning faster than the body
+        const rRing = e.radius * 0.8;
+        const ringSpin = frame * 0.15;
+        const RING_PTS = 14;
+        const rVerts = Array.from({ length: RING_PTS }, (_, k) => {
+            const a = (k / RING_PTS) * Math.PI * 2;
+            return { x: Math.cos(a) * rRing, y: 0, z: Math.sin(a) * rRing };
+        });
+        const rSegs: [Pt, Pt][] = Array.from({ length: RING_PTS }, (_, k) => [
+            project3D(rVerts[k].x, rVerts[k].y, rVerts[k].z, tilt, ringSpin, 0),
+            project3D(rVerts[(k + 1) % RING_PTS].x, rVerts[(k + 1) % RING_PTS].y, rVerts[(k + 1) % RING_PTS].z, tilt, ringSpin, 0),
+        ]);
+        neonStroke(ctx, edgeTrace(rSegs), '#FF5500', { width: 1.5, intensity: 0.6 });
+    }
+
     ctx.restore();
 };
 
