@@ -5,6 +5,8 @@ class InputSystem {
     private keys = new Set<string>();
     private joystickVector: Vector2 = { x: 0, y: 0 };
     private initialized = false;
+    private dashRequested = false;
+    private mobileDashDir: Vector2 | null = null;
 
     init() {
         if (this.initialized) return;
@@ -19,10 +21,16 @@ class InputSystem {
         this.initialized = false;
         this.keys.clear();
         this.joystickVector = { x: 0, y: 0 };
+        this.dashRequested = false;
+        this.mobileDashDir = null;
     }
 
     private handleKeyDown = (e: KeyboardEvent) => {
         this.keys.add(e.code);
+        if (e.code === 'Space') {
+            e.preventDefault();
+            this.dashRequested = true;
+        }
     }
 
     private handleKeyUp = (e: KeyboardEvent) => {
@@ -35,6 +43,26 @@ class InputSystem {
 
     isKeyDown(code: string): boolean {
         return this.keys.has(code);
+    }
+
+    consumeDashRequest(): boolean {
+        const was = this.dashRequested;
+        this.dashRequested = false;
+        return was;
+    }
+
+    triggerDash(): void {
+        this.dashRequested = true;
+    }
+
+    setDashDirection(dir: Vector2): void {
+        this.mobileDashDir = dir;
+    }
+
+    consumeDashDirection(): Vector2 | null {
+        const d = this.mobileDashDir;
+        this.mobileDashDir = null;
+        return d;
     }
 
     getMoveVector(): Vector2 {

@@ -1,8 +1,9 @@
 
 import { Enemy, Player, Projectile, VisualParticle, TextParticle, EnemyType, EntityType, Obstacle } from '../../types';
-import { spawnEnemy, createTextParticle } from '../gameLogic';
+import { spawnEnemy, createTextParticle, createShatterParticles } from '../gameLogic';
 import { checkCollision, SpatialHash, resolveStaticCollision } from '../PhysicsSystem';
 import { getVisualParticle } from '../objectPools';
+import { DASH } from '../../constants';
 import { EnemyBehaviors } from '../ai/EnemyBehaviors';
 import { MASS } from '../data/enemies';
 
@@ -186,6 +187,19 @@ export const updateEnemies = (
         }
 
         if (isHit) {
+            // Dash contact: player damages enemy on pass-through
+            if (player.dashTimer > 0 && !(enemy.immuneTimers['DASH'] > 0)) {
+                enemy.health -= DASH.DAMAGE;
+                enemy.immuneTimers['DASH'] = 20; // one hit per dash pass per enemy
+                const kAngle = Math.atan2(enemy.pos.y - player.pos.y, enemy.pos.x - player.pos.x);
+                enemy.pos.x += Math.cos(kAngle) * 10;
+                enemy.pos.y += Math.sin(kAngle) * 10;
+                const hitPos = { x: (player.pos.x + enemy.pos.x) / 2, y: (player.pos.y + enemy.pos.y) / 2 };
+                result.newParticles.push(...createShatterParticles(hitPos, '#FF6600', 10, 14));
+                result.newParticles.push(...createShatterParticles(hitPos, '#FFFFFF', 5, 8));
+                result.screenShake = Math.max(result.screenShake ?? 0, DASH.SCREEN_SHAKE_HIT);
+            }
+
             // Apply Damage only if I-frames are inactive
             if (player.invulnerabilityTimer <= 0) {
                 const takenDamage = Math.max(1, enemy.damage - player.stats.armor);

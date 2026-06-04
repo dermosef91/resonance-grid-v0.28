@@ -15,6 +15,8 @@ export const Joystick: React.FC<JoystickProps> = () => {
   const baseRef = useRef<HTMLDivElement>(null);
 
   const MAX_DIST = 40; // Max radius of joystick movement
+  const lastTapTimeRef = useRef<number>(0);
+  const DOUBLE_TAP_MS = 300;
 
   const updateVisuals = () => {
     if (!knobRef.current || !baseRef.current) return;
@@ -30,16 +32,29 @@ export const Joystick: React.FC<JoystickProps> = () => {
   const handleStart = (e: React.TouchEvent | React.MouseEvent) => {
     // Only capture if it's the first touch or left mouse button
     if ('button' in e && e.button !== 0) return;
-    
+
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
+
+    // Double-tap detection: dash toward the tap position
+    const now = Date.now();
+    if (now - lastTapTimeRef.current < DOUBLE_TAP_MS) {
+      const dx = clientX - window.innerWidth / 2;
+      const dy = clientY - window.innerHeight / 2;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 10) inputSystem.setDashDirection({ x: dx / len, y: dy / len });
+      inputSystem.triggerDash();
+      lastTapTimeRef.current = 0; // prevent triple-tap chaining
+      return; // don't start joystick on double-tap
+    }
+    lastTapTimeRef.current = now;
+
     setActive(true);
     originRef.current = { x: clientX, y: clientY };
     posRef.current = { x: clientX, y: clientY };
-    
+
     inputSystem.setJoystickVector({ x: 0, y: 0 });
-    
+
     // Defer visual update to next tick to ensure DOM elements exist
     requestAnimationFrame(updateVisuals);
   };
