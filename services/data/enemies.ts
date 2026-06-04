@@ -20,6 +20,18 @@ export const MASS: Record<string, number> = {
     [EnemyType.LASER_LOTUS]: 300,
     [EnemyType.UTATU]: 25,
 
+    // Brainstorm Roster
+    [EnemyType.KINTSUGI_WRAITH]: 4,
+    [EnemyType.MIRROR_DJINN]: 5,
+    [EnemyType.SANKOFA_SIPHON]: 5,
+    [EnemyType.FAULT_LINE_BURROWER]: 6,
+    [EnemyType.DATAMOSH_CORRUPTOR]: 12,
+    [EnemyType.ANANSI_BROOD_POD]: 18,
+    [EnemyType.SANKOFA_TOTEM]: 20,
+    [EnemyType.AEGIS_PHALANX]: 22,
+    [EnemyType.OBSIDIAN_HEART]: 30,
+    [EnemyType.CALABASH_VOID]: 100,
+
     // Bosses
     [EnemyType.BOSS_VANGUARD]: 1000,
     [EnemyType.BOSS_HIVE_MIND]: 2000,
@@ -100,6 +112,48 @@ export const ALL_ENEMIES_DB = [
     {
         type: EnemyType.PRISMATIC_MONOLITH, name: "Prismatic Monolith", hp: 2000, speed: 0.5, damage: 60, xp: 100, radius: 45, color: '#FFFFFF',
         desc: "Slow, tanky. Reflects projectiles into RGB spectrum lasers.", waves: "16", included: true
+    },
+
+    // Brainstorm Roster (v0.28)
+    {
+        type: EnemyType.SANKOFA_TOTEM, name: "Sankofa Totem", hp: 120, speed: 1.2, damage: 20, xp: 30, radius: 28, color: '#FFAA33',
+        desc: "Carved mask that never attacks. Pulses a regen aura onto nearby enemies. Kill it first.", waves: "9, 11", included: true
+    },
+    {
+        type: EnemyType.KINTSUGI_WRAITH, name: "Kintsugi Wraith", hp: 35, speed: 2.6, damage: 30, xp: 18, radius: 16, color: '#FFB000',
+        desc: "Blink-teleports toward you, leaving a damaging gold after-image shard behind.", waves: "7, 10", included: true
+    },
+    {
+        type: EnemyType.CALABASH_VOID, name: "Calabash Void", hp: 250, speed: 0.6, damage: 50, xp: 35, radius: 30, color: '#FF7700',
+        desc: "A collapsing gourd. Drags you inward with its gravity well. High contact damage.", waves: "13, 16", included: true
+    },
+    {
+        type: EnemyType.ANANSI_BROOD_POD, name: "Anansi Brood-Pod", hp: 180, speed: 1.0, damage: 30, xp: 28, radius: 26, color: '#FF8800',
+        desc: "Woven pod that cracks open to release Swarmers, then seals shut.", waves: "8, 12", included: true
+    },
+    {
+        type: EnemyType.SANKOFA_SIPHON, name: "Sankofa Siphon", hp: 90, speed: 3.2, damage: 15, xp: 40, radius: 18, color: '#FFC400',
+        desc: "Kites at range and locks a draining beam onto you, healing itself. Rich in fragments.", waves: "10, 14", included: true
+    },
+    {
+        type: EnemyType.OBSIDIAN_HEART, name: "Obsidian Heart", hp: 150, speed: 1.0, damage: 50, xp: 35, radius: 26, color: '#FF5500',
+        desc: "Hardened glass. Only vulnerable on the brief heartbeat when its core flares open.", waves: "11, 15", included: true
+    },
+    {
+        type: EnemyType.MIRROR_DJINN, name: "Mirror Djinn", hp: 70, speed: 3.0, damage: 30, xp: 25, radius: 18, color: '#E0E0F0',
+        desc: "Chrome doppelganger. Shadows your movement and fires your own volleys back.", waves: "10, 13", included: true
+    },
+    {
+        type: EnemyType.FAULT_LINE_BURROWER, name: "Fault-Line Burrower", hp: 50, speed: 2.2, damage: 40, xp: 22, radius: 18, color: '#FF6600',
+        desc: "Travels untargetable beneath the grid, surfacing to lunge before re-burrowing.", waves: "9, 12", included: true
+    },
+    {
+        type: EnemyType.DATAMOSH_CORRUPTOR, name: "Datamosh Corruptor", hp: 110, speed: 1.8, damage: 25, xp: 28, radius: 22, color: '#F0F0F0',
+        desc: "Smeared corruption block. Lays a trail of lingering damage zones, reshaping the arena.", waves: "13, 14", included: true
+    },
+    {
+        type: EnemyType.AEGIS_PHALANX, name: "Aegis Phalanx", hp: 200, speed: 1.4, damage: 35, xp: 30, radius: 24, color: '#FF7A00',
+        desc: "Ceremonial shield always facing you. Blocks all frontal fire; must be flanked.", waves: "11, 16", included: true
     },
 
     // Bosses

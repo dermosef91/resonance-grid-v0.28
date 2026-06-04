@@ -9,12 +9,12 @@ import { WaveConfig, MissionType, EnemyType } from '../../types';
 const GRP_1 = [EnemyType.DRONE];
 const GRP_2 = [EnemyType.DRONE, EnemyType.SWARMER];
 const GRP_3 = [EnemyType.SENTINEL, EnemyType.ELITE_DRONE]; // Pre-Boss 1
-const GRP_4 = [EnemyType.TANK, EnemyType.GHOST, EnemyType.DRONE]; // Added Drone
-const GRP_5 = [EnemyType.BINARY_SENTINEL, EnemyType.NEON_COBRA, EnemyType.ELITE_DRONE];
-const GRP_6 = [EnemyType.LANCER, EnemyType.TANK, EnemyType.UTATU];
+const GRP_4 = [EnemyType.TANK, EnemyType.GHOST, EnemyType.DRONE, EnemyType.KINTSUGI_WRAITH, EnemyType.ANANSI_BROOD_POD];
+const GRP_5 = [EnemyType.BINARY_SENTINEL, EnemyType.NEON_COBRA, EnemyType.ELITE_DRONE, EnemyType.SANKOFA_TOTEM, EnemyType.FAULT_LINE_BURROWER];
+const GRP_6 = [EnemyType.LANCER, EnemyType.TANK, EnemyType.UTATU, EnemyType.OBSIDIAN_HEART, EnemyType.AEGIS_PHALANX];
 const GRP_6_BOSS = [EnemyType.LANCER, EnemyType.TANK]; // No Utatus for Boss Fight
-const GRP_7 = [EnemyType.SENTINEL, EnemyType.LASER_LOTUS, EnemyType.MANDELBROT_MITE]; // Added Mandelbrot Mite
-const GRP_8 = [EnemyType.ORBITAL_SNIPER, EnemyType.INFERNO_SPINNER];
+const GRP_7 = [EnemyType.SENTINEL, EnemyType.LASER_LOTUS, EnemyType.MANDELBROT_MITE, EnemyType.CALABASH_VOID, EnemyType.DATAMOSH_CORRUPTOR, EnemyType.MIRROR_DJINN];
+const GRP_8 = [EnemyType.ORBITAL_SNIPER, EnemyType.INFERNO_SPINNER, EnemyType.SANKOFA_SIPHON];
 const GRP_9 = [EnemyType.NEON_COBRA, EnemyType.LASER_LOTUS, EnemyType.BINARY_SENTINEL]; // Pre-Boss 3
 
 const SIMPLE_MISSIONS = [
@@ -263,7 +263,12 @@ export const generateRunWaves = (): WaveConfig[] => {
         [EnemyType.TANK, EnemyType.INFERNO_SPINNER, EnemyType.MANDELBROT_MITE], // Replaced Swarmer with Mite in this mix
         [EnemyType.ORBITAL_SNIPER, EnemyType.GHOST, EnemyType.NEON_COBRA],
         [EnemyType.ELITE_DRONE, EnemyType.SWARMER, EnemyType.BINARY_SENTINEL], // Replaced Void Jelly with Elite Drone
-        [EnemyType.UTATU, EnemyType.TANK, EnemyType.MANDELBROT_MITE]
+        [EnemyType.UTATU, EnemyType.TANK, EnemyType.MANDELBROT_MITE],
+        // Brainstorm Roster (v0.28)
+        [EnemyType.CALABASH_VOID, EnemyType.AEGIS_PHALANX, EnemyType.SWARMER],
+        [EnemyType.OBSIDIAN_HEART, EnemyType.MIRROR_DJINN, EnemyType.FAULT_LINE_BURROWER],
+        [EnemyType.SANKOFA_TOTEM, EnemyType.ANANSI_BROOD_POD, EnemyType.KINTSUGI_WRAITH],
+        [EnemyType.DATAMOSH_CORRUPTOR, EnemyType.SANKOFA_SIPHON, EnemyType.TANK]
     ];
 
     // Generate up to 100 waves for endless play

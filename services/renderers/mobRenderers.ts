@@ -626,6 +626,189 @@ export const drawPrismaticMonolith = (ctx: CanvasRenderingContext2D, e: Enemy, f
     ctx.restore();
 };
 
+// --- BRAINSTORM ROSTER (v0.28) ---
+
+export const drawSankofaTotem = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    const r = e.radius;
+    // Expanding "sound-ring" aura pulses.
+    const t = frame * 0.04;
+    for (let i = 0; i < 3; i++) {
+        const phase = (t + i / 3) % 1;
+        const rr = r + phase * 90;
+        neonStroke(ctx, (c) => c.arc(0, 0, rr, 0, Math.PI * 2), e.color, { width: 1.5, intensity: (1 - phase) * 0.5, glow: false, core: false });
+    }
+    ctx.rotate(Math.sin(frame * 0.02) * 0.1);
+    // Carved mask.
+    const maskPts: Pt[] = [
+        { x: 0, y: -r * 1.1 }, { x: r * 0.7, y: -r * 0.6 }, { x: r * 0.6, y: r * 0.5 },
+        { x: 0, y: r * 1.1 }, { x: -r * 0.6, y: r * 0.5 }, { x: -r * 0.7, y: -r * 0.6 }
+    ];
+    neonPoly(ctx, maskPts, e.color, { width: 2, fillAlpha: 0.08, backingAlpha: 0.6 });
+    neonOrb(ctx, -r * 0.3, -r * 0.15, 3, '#ffffff', 1.2);
+    neonOrb(ctx, r * 0.3, -r * 0.15, 3, '#ffffff', 1.2);
+    neonStroke(ctx, (c) => { c.moveTo(-r * 0.3, r * 0.45); c.lineTo(r * 0.3, r * 0.45); }, '#ffffff', { width: 1.5, glow: false });
+    ctx.restore();
+};
+
+export const drawKintsugiWraith = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    // Black porcelain shard body.
+    const pts: Pt[] = [{ x: 0, y: -r }, { x: r * 0.8, y: 0 }, { x: 0, y: r }, { x: -r * 0.8, y: 0 }];
+    neonPoly(ctx, pts, '#1a1208', { width: 1.5, fillAlpha: 0.05, backingAlpha: 0.85 });
+    // Glowing gold cracks (kintsugi).
+    const crackSegs: [Pt, Pt][] = [
+        [{ x: 0, y: -r }, { x: 0, y: r }],
+        [{ x: -r * 0.8, y: 0 }, { x: r * 0.8, y: 0 }],
+        [{ x: -r * 0.4, y: -r * 0.5 }, { x: r * 0.4, y: r * 0.5 }]
+    ];
+    neonStroke(ctx, edgeTrace(crackSegs), e.color, { width: 1.5, intensity: 1.1 });
+    ctx.restore();
+};
+
+export const drawCalabashVoid = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    const r = e.radius;
+    // Dark collapsing core.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(2, 2, 6, 0.95)';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(e.rotation || 0);
+    // Accretion ring.
+    neonStroke(ctx, (c) => c.ellipse(0, 0, r * 1.4, r * 0.5, 0, 0, Math.PI * 2), e.color, { width: 2, intensity: 1 });
+    // Inward-swirling matter.
+    const t = frame * 0.06;
+    for (let i = 0; i < 10; i++) {
+        const a = t + i * (Math.PI * 2 / 10);
+        const rad = r * 1.5 * (i / 10);
+        neonOrb(ctx, Math.cos(a) * rad, Math.sin(a) * rad * 0.4, 1.5, e.color, 0.8);
+    }
+    neonOrb(ctx, 0, 0, 2, e.color, 0.5);
+    ctx.restore();
+};
+
+export const drawAnansiBroodPod = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    const open = e.customData?.open;
+    const hex = (rad: number) => (c: CanvasRenderingContext2D) => {
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const x = Math.cos(a) * rad, y = Math.sin(a) * rad; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.closePath();
+    };
+    ctx.fillStyle = 'rgba(2, 2, 6, 0.8)'; ctx.beginPath(); hex(r)(ctx); ctx.fill();
+    neonStroke(ctx, hex(r), e.color, { width: 2 });
+    neonStroke(ctx, hex(r * 0.6), e.color, { width: 1, glow: false, core: false });
+    // Brood thread + core flares brighter while open.
+    const coreR = open ? r * 0.45 * (0.6 + Math.sin(frame * 0.25) * 0.4) : r * 0.18;
+    neonOrb(ctx, 0, 0, coreR, open ? '#FFCC66' : '#FF8800', open ? 1.4 : 0.7);
+    ctx.restore();
+};
+
+export const drawSankofaSiphon = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    // Backward-looking bird glyph.
+    neonStroke(ctx, (c) => { c.moveTo(-r, r * 0.6); c.quadraticCurveTo(r * 1.2, 0, -r * 0.2, -r); }, e.color, { width: 2, intensity: 1 });
+    neonStroke(ctx, (c) => { c.moveTo(-r, r * 0.6); c.lineTo(r * 0.5, r * 0.2); }, e.color, { width: 1.5, glow: false });
+    // Feeding tendrils.
+    if (e.state === 'ATTACK') {
+        for (let i = 0; i < 3; i++) {
+            const a = Math.PI + (i - 1) * 0.3 + Math.sin(frame * 0.2 + i) * 0.2;
+            neonStroke(ctx, (c) => { c.moveTo(0, 0); c.lineTo(Math.cos(a) * r * 1.5, Math.sin(a) * r * 1.5); }, e.color, { width: 1, glow: false, core: false });
+        }
+    }
+    neonOrb(ctx, 0, 0, 3, '#ffffff', 1);
+    ctx.restore();
+};
+
+export const drawObsidianHeart = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    const vuln = e.customData?.vulnerable;
+    const oct = (rad: number) => (c: CanvasRenderingContext2D) => {
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const x = Math.cos(a) * rad, y = Math.sin(a) * rad; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.closePath();
+    };
+    // Glassy obsidian shell — hardens (cold) vs flares (hot) on the beat.
+    ctx.fillStyle = 'rgba(2, 2, 6, 0.92)'; ctx.beginPath(); oct(r)(ctx); ctx.fill();
+    neonStroke(ctx, oct(r), vuln ? '#FFAA33' : '#552200', { width: 2, intensity: vuln ? 1.3 : 0.7 });
+    const beat = 0.5 + Math.sin(frame * 0.2) * 0.5;
+    const coreR = vuln ? r * 0.5 * (0.7 + beat * 0.5) : r * 0.12;
+    neonOrb(ctx, 0, 0, coreR, vuln ? '#FF7722' : '#aa3300', vuln ? 1.6 : 0.6);
+    ctx.restore();
+};
+
+export const drawMirrorDjinn = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    // Chrome doppelganger silhouette.
+    const body: Pt[] = [{ x: 0, y: -r * 1.1 }, { x: r * 0.7, y: 0 }, { x: 0, y: r * 1.1 }, { x: -r * 0.7, y: 0 }];
+    neonPoly(ctx, body, e.color, { width: 2, fillAlpha: 0.1, backingAlpha: 0.6 });
+    neonStroke(ctx, (c) => { c.moveTo(0, -r * 1.1); c.lineTo(0, r * 1.1); }, '#ffffff', { width: 1.5, intensity: 1.2 });
+    neonOrb(ctx, -r * 0.25, -r * 0.2, 2, '#ffffff', 1);
+    ctx.restore();
+};
+
+export const drawFaultLineBurrower = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0);
+    const r = e.radius;
+    if (e.customData?.submerged) {
+        // Just a jagged glowing fault-line skating the grid.
+        ctx.globalAlpha = e.opacity ?? 0.2;
+        const segs: [Pt, Pt][] = [];
+        let px = -r * 1.6;
+        for (let i = 0; i < 6; i++) { const nx = px + r * 0.55; const ny = (Math.random() - 0.5) * r * 0.5; segs.push([{ x: px, y: 0 }, { x: nx, y: ny }]); px = nx; }
+        neonStroke(ctx, edgeTrace(segs), e.color, { width: 1.5, intensity: 0.8, glow: false });
+        ctx.globalAlpha = 1;
+    } else {
+        // Surfaced clawed striker.
+        ctx.globalAlpha = e.opacity ?? 1;
+        const claw: Pt[] = [{ x: r, y: 0 }, { x: -r * 0.3, y: -r * 0.7 }, { x: -r * 0.6, y: 0 }, { x: -r * 0.3, y: r * 0.7 }];
+        neonPoly(ctx, claw, e.color, { width: 2, fillAlpha: 0.08 });
+        neonStroke(ctx, (c) => { c.moveTo(r, 0); c.lineTo(r * 1.5, -r * 0.2); c.moveTo(r, 0); c.lineTo(r * 1.5, r * 0.2); }, '#ffffff', { width: 1.5, glow: false });
+        neonOrb(ctx, 0, 0, 3, '#ffffff', 1);
+        ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+};
+
+export const drawDatamoshCorruptor = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    const r = e.radius;
+    // Smeared, glitching corruption block.
+    for (let i = 0; i < 5; i++) {
+        const ox = (Math.random() - 0.5) * r * 1.5;
+        const oy = (i - 2) * r * 0.4;
+        const w = r * (0.8 + Math.random() * 0.8);
+        const col = i % 2 === 0 ? '#F0F0F0' : '#FF6600';
+        neonStroke(ctx, (c) => c.rect(ox - w / 2, oy - r * 0.18, w, r * 0.36), col, { width: 1.5, glow: false, core: false });
+    }
+    neonOrb(ctx, 0, 0, 3, '#FF6600', 1);
+    ctx.restore();
+};
+
+export const drawAegisPhalanx = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
+    ctx.save();
+    ctx.rotate(e.rotation || 0); // +X axis faces the player (the shielded front).
+    const r = e.radius;
+    // Exposed core at the back.
+    neonOrb(ctx, -r * 0.7, 0, 4, '#FFCC66', 1.2);
+    neonStroke(ctx, (c) => c.arc(0, 0, r * 0.5, 0, Math.PI * 2), e.color, { width: 1.5, glow: false });
+    // Shield slab on the front.
+    ctx.save();
+    ctx.translate(r * 0.6, 0);
+    const sh = r * 1.6, sw = r * 0.5;
+    neonPoly(ctx, [{ x: -sw / 2, y: -sh / 2 }, { x: sw / 2, y: -sh / 2 }, { x: sw / 2, y: sh / 2 }, { x: -sw / 2, y: sh / 2 }], e.color, { width: 2.5, fillAlpha: 0.12, backingAlpha: 0.7, intensity: 1.2 });
+    neonStroke(ctx, (c) => { c.moveTo(0, -sh * 0.25); c.lineTo(0, sh * 0.25); c.moveTo(-sw * 0.2, 0); c.lineTo(sw * 0.2, 0); }, '#ffffff', { width: 1.5, glow: false });
+    ctx.restore();
+    ctx.restore();
+};
+
 export const drawDefault = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.scale(1 + Math.sin(frame * 0.1) * 0.1, 1 + Math.sin(frame * 0.1) * 0.1);
     neonStroke(ctx, (c) => c.arc(0, 0, e.radius, 0, Math.PI * 2), e.color || '#fff', { width: 2 });

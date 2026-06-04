@@ -12,7 +12,11 @@ import {
     drawGhost, drawTank, drawSwarmer, drawNeonCobra, drawInfernoSpinner, 
     drawBinarySentinel, drawLaserLotus, 
     drawOrbitalSniper, drawUtatu, drawDefault,
-    drawMandelbrotMite, drawPrismaticMonolith
+    drawMandelbrotMite, drawPrismaticMonolith,
+    drawSankofaTotem, drawKintsugiWraith, drawCalabashVoid,
+    drawAnansiBroodPod, drawSankofaSiphon, drawObsidianHeart,
+    drawMirrorDjinn, drawFaultLineBurrower, drawDatamoshCorruptor,
+    drawAegisPhalanx
 } from './mobRenderers';
 
 type Renderer = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => void;
@@ -48,7 +52,19 @@ export const EnemyRenderRegistry: Record<string, Renderer> = {
     // NEW ENEMIES
     [EnemyType.MANDELBROT_MITE]: drawMandelbrotMite,
     [EnemyType.PRISMATIC_MONOLITH]: drawPrismaticMonolith,
-    
+
+    // BRAINSTORM ROSTER (v0.28)
+    [EnemyType.SANKOFA_TOTEM]: drawSankofaTotem,
+    [EnemyType.KINTSUGI_WRAITH]: drawKintsugiWraith,
+    [EnemyType.CALABASH_VOID]: drawCalabashVoid,
+    [EnemyType.ANANSI_BROOD_POD]: drawAnansiBroodPod,
+    [EnemyType.SANKOFA_SIPHON]: drawSankofaSiphon,
+    [EnemyType.OBSIDIAN_HEART]: drawObsidianHeart,
+    [EnemyType.MIRROR_DJINN]: drawMirrorDjinn,
+    [EnemyType.FAULT_LINE_BURROWER]: drawFaultLineBurrower,
+    [EnemyType.DATAMOSH_CORRUPTOR]: drawDatamoshCorruptor,
+    [EnemyType.AEGIS_PHALANX]: drawAegisPhalanx,
+
     // DEFAULT
     'DEFAULT': drawDefault
 };

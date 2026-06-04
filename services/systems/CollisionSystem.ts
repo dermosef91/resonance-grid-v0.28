@@ -146,6 +146,33 @@ export const resolveCollisions = (
                     }
                 }
 
+                // --- BRAINSTORM ROSTER DAMAGE GATES ---
+                // Fault-Line Burrower: untargetable while submerged beneath the grid.
+                if (enemy.customData?.submerged) continue;
+
+                // Obsidian Heart: hardened glass, only damageable during its heartbeat flare.
+                if (enemy.enemyType === EnemyType.OBSIDIAN_HEART && !enemy.customData?.vulnerable && !proj.beamData && !proj.paradoxData) {
+                    if (checkCollision(enemy, proj)) {
+                        proj.markedForDeletion = true;
+                        result.newParticles.push(createTextParticle(proj.pos, "HARDENED", '#888888'));
+                        continue;
+                    }
+                }
+
+                // Aegis Phalanx: blocks any non-beam shot striking its front arc (shield faces the player).
+                if (enemy.enemyType === EnemyType.AEGIS_PHALANX && !proj.beamData && !proj.paradoxData) {
+                    if (checkCollision(enemy, proj)) {
+                        const incidence = Math.atan2(proj.pos.y - enemy.pos.y, proj.pos.x - enemy.pos.x);
+                        let arc = Math.abs(incidence - (enemy.rotation || 0));
+                        while (arc > Math.PI) arc = Math.abs(arc - Math.PI * 2);
+                        if (arc < Math.PI * 0.45) {
+                            proj.markedForDeletion = true;
+                            result.newParticles.push(createTextParticle(proj.pos, "BLOCKED", '#FF8800'));
+                            continue;
+                        }
+                    }
+                }
+
                 let hit = false;
 
                 if (proj.paradoxData) {
