@@ -77,6 +77,9 @@ export const GameHUD: React.FC<{
     let borderColor = "border-orange-500";
     let titleColor = "text-orange-400";
     let splashShadow = "shadow-[0_0_30px_rgba(255,102,0,0.4)]";
+    let missionHex = '#ff6600';
+    let progressFraction: number | null = null;
+    let isUrgent = false;
 
     if (tutorialStep !== 'NONE') {
         showDisplay = true;
@@ -99,6 +102,7 @@ export const GameHUD: React.FC<{
         borderColor = styles.border;
         titleColor = styles.text;
         splashShadow = styles.splashShadow;
+        missionHex = styles.hex;
 
         let timeLeft = 0;
 
@@ -128,6 +132,26 @@ export const GameHUD: React.FC<{
         if (missionDisplayState === 'SPLASH' || isFinalCountdown) {
             isSplash = true;
         }
+
+        if (mission.type === MissionType.ELIMINATE
+            || mission.type === MissionType.KING_OF_THE_HILL
+            || mission.type === MissionType.RITUAL_CIRCLE
+            || mission.type === MissionType.PAYLOAD_ESCORT) {
+            progressFraction = mission.total > 0 ? mission.progress / mission.total : 0;
+        } else if (mission.type === MissionType.SURVIVE
+            || mission.type === MissionType.SHADOW_STEP
+            || mission.type === MissionType.WEAPON_OVERRIDE
+            || mission.type === MissionType.EVENT_HORIZON) {
+            progressFraction = mission.total > 0 ? timeLeft / mission.total : 0;
+        } else if (mission.type === MissionType.DATA_RUN) {
+            progressFraction = mission.stage === 'LOCATE_FRAGMENT' ? 0.25 : 0.75;
+        }
+
+        isUrgent = (mission.type === MissionType.SURVIVE
+            || mission.type === MissionType.SHADOW_STEP
+            || mission.type === MissionType.EVENT_HORIZON
+            || mission.type === MissionType.WEAPON_OVERRIDE)
+            && timeLeft <= 10 && timeLeft > 3;
     }
 
     // Determine which bosses to display
@@ -146,18 +170,45 @@ export const GameHUD: React.FC<{
                 `}
                 >
                     <div className={`
-                    bg-black/80 backdrop-blur-sm border-y-2 ${borderColor} skew-x-[-15deg] 
+                    relative bg-black/80 backdrop-blur-sm border-y-2 ${borderColor} skew-x-[-15deg]
                     flex flex-col items-center shadow-lg transition-all
                     ${isSplash ? `px-8 py-3 ${splashShadow}` : 'px-4 py-1'}
+                    ${isUrgent && !isSplash ? 'animate-pulse' : ''}
                 `}>
+                        {mission && !isSplash && (
+                            <>
+                                <span className="absolute top-0 left-0 w-2 h-2 border-t border-l opacity-60" style={{ borderColor: missionHex }} />
+                                <span className="absolute top-0 right-0 w-2 h-2 border-t border-r opacity-60" style={{ borderColor: missionHex }} />
+                                <span className="absolute bottom-0 left-0 w-2 h-2 border-b border-l opacity-60" style={{ borderColor: missionHex }} />
+                                <span className="absolute bottom-0 right-0 w-2 h-2 border-b border-r opacity-60" style={{ borderColor: missionHex }} />
+                            </>
+                        )}
                         {displayTitle && (
-                            <div className={`${titleColor} font-mono font-bold text-xs tracking-[0.2em] skew-x-[15deg] uppercase whitespace-nowrap`}>
+                            <div
+                                className={`${titleColor} font-mono font-bold text-xs tracking-[0.2em] skew-x-[15deg] uppercase whitespace-nowrap`}
+                                style={mission ? { textShadow: `0 0 8px ${missionHex}, 0 0 20px ${missionHex}60` } : undefined}
+                            >
                                 {displayTitle}
                             </div>
                         )}
                         {displayContent && (
-                            <div className={`text-white font-black skew-x-[15deg] tracking-wider ${isSplash ? 'text-xl' : 'text-sm'}`}>
+                            <div
+                                className={`text-white font-black skew-x-[15deg] tracking-wider ${isSplash ? 'text-xl' : 'text-sm'}`}
+                                style={mission ? { textShadow: `0 0 12px ${missionHex}, 0 0 28px ${missionHex}80` } : undefined}
+                            >
                                 {displayContent}
+                            </div>
+                        )}
+                        {progressFraction !== null && !isSplash && (
+                            <div className="w-full h-[2px] bg-black/60 mt-1 skew-x-[15deg]">
+                                <div
+                                    className="h-full transition-all duration-500"
+                                    style={{
+                                        width: `${Math.min(1, Math.max(0, progressFraction)) * 100}%`,
+                                        background: missionHex,
+                                        boxShadow: `0 0 6px ${missionHex}`,
+                                    }}
+                                />
                             </div>
                         )}
                     </div>
