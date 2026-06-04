@@ -24,11 +24,9 @@ export const MASS: Record<string, number> = {
     [EnemyType.KINTSUGI_WRAITH]: 4,
     [EnemyType.MIRROR_DJINN]: 5,
     [EnemyType.SANKOFA_SIPHON]: 5,
-    [EnemyType.FAULT_LINE_BURROWER]: 6,
     [EnemyType.DATAMOSH_CORRUPTOR]: 12,
     [EnemyType.ANANSI_BROOD_POD]: 18,
     [EnemyType.SANKOFA_TOTEM]: 20,
-    [EnemyType.AEGIS_PHALANX]: 22,
     [EnemyType.OBSIDIAN_HEART]: 30,
     [EnemyType.CALABASH_VOID]: 100,
 
@@ -144,16 +142,8 @@ export const ALL_ENEMIES_DB = [
         desc: "Chrome doppelganger. Shadows your movement and fires your own volleys back.", waves: "10, 13", included: true
     },
     {
-        type: EnemyType.FAULT_LINE_BURROWER, name: "Fault-Line Burrower", hp: 50, speed: 2.2, damage: 40, xp: 22, radius: 18, color: '#FF6600',
-        desc: "Travels untargetable beneath the grid, surfacing to lunge before re-burrowing.", waves: "9, 12", included: true
-    },
-    {
         type: EnemyType.DATAMOSH_CORRUPTOR, name: "Datamosh Corruptor", hp: 110, speed: 1.8, damage: 25, xp: 28, radius: 22, color: '#F0F0F0',
         desc: "Smeared corruption block. Lays a trail of lingering damage zones, reshaping the arena.", waves: "13, 14", included: true
-    },
-    {
-        type: EnemyType.AEGIS_PHALANX, name: "Aegis Phalanx", hp: 200, speed: 1.4, damage: 35, xp: 30, radius: 24, color: '#FF7A00',
-        desc: "Ceremonial shield always facing you. Blocks all frontal fire; must be flanked.", waves: "11, 16", included: true
     },
 
     // Bosses

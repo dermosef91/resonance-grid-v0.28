@@ -622,39 +622,6 @@ export class MirrorDjinnBehavior implements IEnemyBehavior {
     }
 }
 
-// Untargetable ambush: burrows beneath the grid, surfaces to lunge, re-burrows.
-export class FaultLineBurrowerBehavior implements IEnemyBehavior {
-    update(enemy: Enemy, player: Player): AIResult {
-        const result = createEmptyResult();
-        const dx = player.pos.x - enemy.pos.x;
-        const dy = player.pos.y - enemy.pos.y;
-        const angle = Math.atan2(dy, dx);
-        enemy.customData = enemy.customData || {};
-        enemy.attackTimer++;
-
-        if (enemy.attackTimer < 120) {
-            // SUBMERGED: untargetable, faster approach, faint crack visual.
-            enemy.customData.submerged = true;
-            enemy.opacity = 0.2;
-            enemy.state = 'PHASE_OUT';
-            enemy.rotation = angle;
-            result.velocity = { x: Math.cos(angle) * enemy.speed * 2.2, y: Math.sin(angle) * enemy.speed * 2.2 };
-            if (enemy.attackTimer === 119) enemy.customData.lungeAngle = angle; // lock aim
-        } else if (enemy.attackTimer < 165) {
-            // SURFACED LUNGE: vulnerable, bursts along the locked direction.
-            enemy.customData.submerged = false;
-            enemy.opacity = 1;
-            enemy.state = 'CHARGE';
-            const la = enemy.customData.lungeAngle ?? angle;
-            enemy.rotation = la;
-            result.velocity = { x: Math.cos(la) * enemy.speed * 4.5, y: Math.sin(la) * enemy.speed * 4.5 };
-        } else {
-            enemy.attackTimer = 0;
-        }
-        return result;
-    }
-}
-
 // Area denial: wanders erratically, laying a trail of lingering damage zones.
 export class DatamoshCorruptorBehavior implements IEnemyBehavior {
     update(enemy: Enemy, player: Player): AIResult {
@@ -686,26 +653,6 @@ export class DatamoshCorruptorBehavior implements IEnemyBehavior {
                 isEnemy: true
             }));
         }
-        return result;
-    }
-}
-
-// Directional shield: advances while keeping its shield facing the player.
-export class AegisPhalanxBehavior implements IEnemyBehavior {
-    update(enemy: Enemy, player: Player): AIResult {
-        const result = createEmptyResult();
-        const dx = player.pos.x - enemy.pos.x;
-        const dy = player.pos.y - enemy.pos.y;
-        const angle = Math.atan2(dy, dx);
-
-        // Smoothly rotate to face the player (CollisionSystem reads enemy.rotation).
-        let cur = enemy.rotation || 0;
-        let diff = angle - cur;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        enemy.rotation = cur + Math.max(-0.06, Math.min(0.06, diff));
-
-        result.velocity = { x: Math.cos(enemy.rotation) * enemy.speed, y: Math.sin(enemy.rotation) * enemy.speed };
         return result;
     }
 }

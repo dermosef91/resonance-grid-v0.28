@@ -73,9 +73,7 @@ export enum EnemyType {
   SANKOFA_SIPHON = 'SANKOFA_SIPHON',     // Resource leech / kiter
   OBSIDIAN_HEART = 'OBSIDIAN_HEART',     // Rhythm-gated armor
   MIRROR_DJINN = 'MIRROR_DJINN',         // Mimic, fires volleys back
-  FAULT_LINE_BURROWER = 'FAULT_LINE_BURROWER', // Untargetable ambush
   DATAMOSH_CORRUPTOR = 'DATAMOSH_CORRUPTOR',   // Area denial trail
-  AEGIS_PHALANX = 'AEGIS_PHALANX',       // Directional front shield
 
   // --- PHYSICS / METAPHYSICS ENEMIES ---
   MANDELBROT_MITE = 'MANDELBROT_MITE',

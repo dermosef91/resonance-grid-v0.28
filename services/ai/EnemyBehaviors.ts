@@ -8,8 +8,7 @@ import {
     MandelbrotBehavior, MonolithBehavior,
     SankofaTotemBehavior, KintsugiWraithBehavior, CalabashVoidBehavior,
     AnansiBroodPodBehavior, SankofaSiphonBehavior, ObsidianHeartBehavior,
-    MirrorDjinnBehavior, FaultLineBurrowerBehavior, DatamoshCorruptorBehavior,
-    AegisPhalanxBehavior
+    MirrorDjinnBehavior, DatamoshCorruptorBehavior
 } from './behaviors/MobBehaviors';
 import { 
     BossVanguardBehavior, BossHiveMindBehavior, BossCyberKrakenBehavior, 
@@ -38,9 +37,7 @@ export const EnemyBehaviors: Record<string, IEnemyBehavior> = {
     [EnemyType.SANKOFA_SIPHON]: new SankofaSiphonBehavior(),
     [EnemyType.OBSIDIAN_HEART]: new ObsidianHeartBehavior(),
     [EnemyType.MIRROR_DJINN]: new MirrorDjinnBehavior(),
-    [EnemyType.FAULT_LINE_BURROWER]: new FaultLineBurrowerBehavior(),
     [EnemyType.DATAMOSH_CORRUPTOR]: new DatamoshCorruptorBehavior(),
-    [EnemyType.AEGIS_PHALANX]: new AegisPhalanxBehavior(),
     
     // Orbital Shared
     [EnemyType.SWARMER]: new OrbitalBehavior(),

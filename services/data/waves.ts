@@ -10,8 +10,8 @@ const GRP_1 = [EnemyType.DRONE];
 const GRP_2 = [EnemyType.DRONE, EnemyType.SWARMER];
 const GRP_3 = [EnemyType.SENTINEL, EnemyType.ELITE_DRONE]; // Pre-Boss 1
 const GRP_4 = [EnemyType.TANK, EnemyType.GHOST, EnemyType.DRONE, EnemyType.KINTSUGI_WRAITH, EnemyType.ANANSI_BROOD_POD];
-const GRP_5 = [EnemyType.BINARY_SENTINEL, EnemyType.NEON_COBRA, EnemyType.ELITE_DRONE, EnemyType.SANKOFA_TOTEM, EnemyType.FAULT_LINE_BURROWER];
-const GRP_6 = [EnemyType.LANCER, EnemyType.TANK, EnemyType.UTATU, EnemyType.OBSIDIAN_HEART, EnemyType.AEGIS_PHALANX];
+const GRP_5 = [EnemyType.BINARY_SENTINEL, EnemyType.NEON_COBRA, EnemyType.ELITE_DRONE, EnemyType.SANKOFA_TOTEM];
+const GRP_6 = [EnemyType.LANCER, EnemyType.TANK, EnemyType.UTATU, EnemyType.OBSIDIAN_HEART];
 const GRP_6_BOSS = [EnemyType.LANCER, EnemyType.TANK]; // No Utatus for Boss Fight
 const GRP_7 = [EnemyType.SENTINEL, EnemyType.LASER_LOTUS, EnemyType.MANDELBROT_MITE, EnemyType.CALABASH_VOID, EnemyType.DATAMOSH_CORRUPTOR, EnemyType.MIRROR_DJINN];
 const GRP_8 = [EnemyType.ORBITAL_SNIPER, EnemyType.INFERNO_SPINNER, EnemyType.SANKOFA_SIPHON];
@@ -265,8 +265,8 @@ export const generateRunWaves = (): WaveConfig[] => {
         [EnemyType.ELITE_DRONE, EnemyType.SWARMER, EnemyType.BINARY_SENTINEL], // Replaced Void Jelly with Elite Drone
         [EnemyType.UTATU, EnemyType.TANK, EnemyType.MANDELBROT_MITE],
         // Brainstorm Roster (v0.28)
-        [EnemyType.CALABASH_VOID, EnemyType.AEGIS_PHALANX, EnemyType.SWARMER],
-        [EnemyType.OBSIDIAN_HEART, EnemyType.MIRROR_DJINN, EnemyType.FAULT_LINE_BURROWER],
+        [EnemyType.CALABASH_VOID, EnemyType.SWARMER, EnemyType.MANDELBROT_MITE],
+        [EnemyType.OBSIDIAN_HEART, EnemyType.MIRROR_DJINN, EnemyType.NEON_COBRA],
         [EnemyType.SANKOFA_TOTEM, EnemyType.ANANSI_BROOD_POD, EnemyType.KINTSUGI_WRAITH],
         [EnemyType.DATAMOSH_CORRUPTOR, EnemyType.SANKOFA_SIPHON, EnemyType.TANK]
     ];
