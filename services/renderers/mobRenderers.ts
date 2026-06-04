@@ -58,9 +58,15 @@ export const drawDrone = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number
         // Orbiting thruster nodes — 2 energy pods flanking the body
         const orbitR = e.radius * 1.6;
         const orbitAngle = frame * 0.07;
+        const buffed = (e.customData?.buffFrames || 0) > 0;
         for (let i = 0; i < 2; i++) {
             const a = orbitAngle + i * Math.PI;
-            neonOrb(ctx, Math.cos(a) * orbitR, Math.sin(a) * orbitR, 3, '#ffaa00', 0.7);
+            neonOrb(ctx, Math.cos(a) * orbitR, Math.sin(a) * orbitR, buffed ? 4 : 3, buffed ? '#ffffff' : '#ffaa00', buffed ? 1 : 0.7);
+        }
+        // Rally buff aura: a pulsing ring while the commander's boost is active.
+        if (buffed) {
+            const auraPulse = 0.8 + Math.sin(frame * 0.3) * 0.2;
+            neonStroke(ctx, (c) => c.arc(0, 0, e.radius * 1.35, 0, Math.PI * 2), '#FF8800', { width: 2, intensity: auraPulse, core: false });
         }
     } else {
         // Counter-rotating inner tetrahedron — white core spinning opposite the shell
