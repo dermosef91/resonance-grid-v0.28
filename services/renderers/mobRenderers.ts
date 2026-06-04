@@ -667,120 +667,138 @@ export const drawPrismaticMonolith = (ctx: CanvasRenderingContext2D, e: Enemy, f
 export const drawSankofaTotem = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
     const r = e.radius;
-    const t = frame * 0.025;
+    const TAU = Math.PI * 2;
     const breathe = 0.85 + Math.sin(frame * 0.045) * 0.15;
 
     // Broken ancestral-energy aura: segmented arcs with gaps, crackling outward
+    const t = frame * 0.025;
     for (let i = 0; i < 3; i++) {
         const phase = (t * 0.55 + i / 3) % 1;
         const rr = r * 1.1 + phase * 85;
         const alpha = (1 - phase) * 0.45;
         neonStroke(ctx, (c) => {
             for (let s = 0; s < 8; s++) {
-                const a0 = (s / 8) * Math.PI * 2;
-                const a1 = ((s + 0.6) / 8) * Math.PI * 2;
+                const a0 = (s / 8) * TAU;
+                const a1 = ((s + 0.6) / 8) * TAU;
                 c.moveTo(rr * Math.cos(a0), rr * Math.sin(a0));
                 c.arc(0, 0, rr, a0, a1);
             }
         }, e.color, { width: 1, intensity: alpha, glow: false, core: false });
     }
 
-    // Slow, ponderous sway
-    ctx.rotate(Math.sin(frame * 0.014) * 0.07);
+    // --- 3D carved relief ---------------------------------------------------
+    // A slow yaw sway turns the mask side-to-side; because the central spine
+    // (brow → nose → chin) is pushed toward the camera and the rim + sockets
+    // are set back, the parallax reads as a genuine carved-from-wood depth.
+    const yaw = Math.sin(frame * 0.015) * 0.42;
+    const pitch = 0.14 + Math.sin(frame * 0.022) * 0.05;
+    const P = (x: number, y: number, z: number) => project3D(x * r, y * r, z * r, pitch, yaw, 0, 360);
 
-    // Stake / plinth base — driven into the ground
-    neonStroke(ctx, (c) => {
-        c.moveTo(-r * 0.14, r * 1.1);
-        c.lineTo(0, r * 1.52);
-        c.lineTo(r * 0.14, r * 1.1);
-    }, e.color, { width: 2, intensity: 0.55, glow: false });
-
-    // Crown horns — branching prongs referencing the Sankofa bird silhouette
-    neonStroke(ctx, (c) => {
-        c.moveTo(-r * 0.22, -r * 1.05);
-        c.lineTo(-r * 0.52, -r * 1.65);
-        c.lineTo(-r * 0.18, -r * 1.2);
-    }, e.color, { width: 1.5, intensity: 1.0 });
-    neonStroke(ctx, (c) => {
-        c.moveTo( r * 0.22, -r * 1.05);
-        c.lineTo( r * 0.52, -r * 1.65);
-        c.lineTo( r * 0.18, -r * 1.2);
-    }, e.color, { width: 1.5, intensity: 1.0 });
-    neonOrb(ctx, 0, -r * 1.35, 2.5, e.color, 1.1);
-
-    // Main mask body: 14-point polygon with cheek notches for depth
-    const maskPts: Pt[] = [
-        { x:  0,         y: -r * 1.35 },
-        { x:  r * 0.28,  y: -r * 1.05 },
-        { x:  r * 0.62,  y: -r * 0.58 },
-        { x:  r * 0.72,  y: -r * 0.1  },
-        { x:  r * 0.55,  y:  r * 0.28 },
-        { x:  r * 0.68,  y:  r * 0.62 },
-        { x:  r * 0.42,  y:  r * 1.05 },
-        { x:  0,         y:  r * 1.12 },
-        { x: -r * 0.42,  y:  r * 1.05 },
-        { x: -r * 0.68,  y:  r * 0.62 },
-        { x: -r * 0.55,  y:  r * 0.28 },
-        { x: -r * 0.72,  y: -r * 0.1  },
-        { x: -r * 0.62,  y: -r * 0.58 },
-        { x: -r * 0.28,  y: -r * 1.05 },
+    // Central protruding spine (z+) running down the face.
+    const R = [
+        P(0, -0.95, 0.30), // 0 forehead
+        P(0, -0.45, 0.42), // 1 brow
+        P(0, -0.05, 0.50), // 2 nose bridge
+        P(0,  0.28, 0.72), // 3 nose tip (max protrusion)
+        P(0,  0.55, 0.34), // 4 upper lip
+        P(0,  1.05, 0.28), // 5 chin
     ];
-    neonPoly(ctx, maskPts, e.color, { width: 2.5, fillAlpha: 0.07, backingAlpha: 0.82 });
+    // Recessed rim (z-) — outer silhouette of the mask, right + left halves.
+    const RR = [
+        P(0,    -1.32, -0.05),
+        P(0.46, -0.98, -0.30),
+        P(0.72, -0.42, -0.42),
+        P(0.62,  0.22, -0.42),
+        P(0.48,  0.78, -0.34),
+        P(0.20,  1.12, -0.20),
+    ];
+    const RL = [
+        RR[0],
+        P(-0.46, -0.98, -0.30),
+        P(-0.72, -0.42, -0.42),
+        P(-0.62,  0.22, -0.42),
+        P(-0.48,  0.78, -0.34),
+        P(-0.20,  1.12, -0.20),
+    ];
+    const chin = P(0, 1.24, -0.02);
 
-    // Brow ridge — heavy angular furrow conveying menace
-    neonStroke(ctx, (c) => {
-        c.moveTo(-r * 0.62, -r * 0.28);
-        c.lineTo(-r * 0.32, -r * 0.48);
-        c.lineTo(-r * 0.06, -r * 0.42);
-    }, e.color, { width: 2, intensity: 0.9 });
-    neonStroke(ctx, (c) => {
-        c.moveTo( r * 0.62, -r * 0.28);
-        c.lineTo( r * 0.32, -r * 0.48);
-        c.lineTo( r * 0.06, -r * 0.42);
-    }, e.color, { width: 2, intensity: 0.9 });
+    // Triangulate spine → rim into a faceted shell; depth drives shading.
+    type Face = { pts: { x: number; y: number }[]; depth: number };
+    const faces: Face[] = [];
+    const tri = (a: typeof R[0], b: typeof R[0], c: typeof R[0]) =>
+        faces.push({ pts: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3 });
+    for (let i = 0; i < 5; i++) {
+        tri(R[i], RR[i], RR[i + 1]);
+        tri(R[i], RR[i + 1], R[i + 1]);
+        tri(R[i], RL[i + 1], RL[i]);
+        tri(R[i], R[i + 1], RL[i + 1]);
+    }
+    tri(R[5], RR[5], chin);
+    tri(R[5], chin, RL[5]);
 
-    // Eye sockets — dark hollow pits
-    const eyeY = -r * 0.12;
-    const exL = -r * 0.33, exR = r * 0.33;
-    const eW = r * 0.2, eH = r * 0.25;
+    let dMin = Infinity, dMax = -Infinity;
+    for (const f of faces) { if (f.depth < dMin) dMin = f.depth; if (f.depth > dMax) dMax = f.depth; }
+    const dSpan = dMax - dMin || 1;
+    faces.sort((a, b) => a.depth - b.depth); // painter's order: far → near
+    for (const f of faces) {
+        const b = (f.depth - dMin) / dSpan; // 0 = receding, 1 = facing camera
+        neonPoly(ctx, f.pts, e.color, {
+            width: 1.3,
+            fillAlpha: 0.04 + b * 0.07,
+            backingAlpha: 0.7,
+            brightness: 0.1 + b * 0.9,
+            intensity: 0.5 + b * 0.7,
+            glow: false,
+        });
+    }
+
+    // Crown horns — protruding prongs echoing the Sankofa bird's neck.
+    for (const s of [-1, 1]) {
+        const a = P(s * 0.22, -1.05, 0.22), b = P(s * 0.52, -1.6, 0.08), c = P(s * 0.16, -1.2, 0.18);
+        neonStroke(ctx, (cx) => { cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.lineTo(c.x, c.y); }, e.color, { width: 1.5, intensity: 1.0 });
+    }
+    const crown = P(0, -1.42, 0.16);
+    neonOrb(ctx, crown.x, crown.y, 2.4, e.color, 1.1);
+
+    // Eye sockets — bored into the slope, pulsing ember cores at the bottom.
+    for (const s of [-1, 1]) {
+        const p = P(s * 0.33, -0.10, 0.16);
+        const ew = r * 0.2 * p.scale, eh = r * 0.26 * p.scale;
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(2, 2, 6, 0.94)';
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, ew, eh, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+        neonStroke(ctx, (c) => { c.ellipse(p.x, p.y, ew, eh, 0, 0, TAU); }, e.color, { width: 1.5, intensity: 1.0 });
+        neonOrb(ctx, p.x, p.y, ew * 0.45 * breathe, '#FF3300', 1.6);
+    }
+
+    // Mouth — gaping void with tooth dividers, sunk just under the lip.
+    const m = P(0, 0.66, 0.18);
+    const mw = r * 0.4 * m.scale, mh = r * 0.15 * m.scale;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = 'rgba(2, 2, 6, 0.94)';
-    ctx.beginPath(); ctx.ellipse(exL, eyeY, eW, eH, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(exR, eyeY, eW, eH, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(m.x, m.y, mw, mh, 0, 0, TAU); ctx.fill();
     ctx.restore();
-    neonStroke(ctx, (c) => { c.ellipse(exL, eyeY, eW, eH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 1.0 });
-    neonStroke(ctx, (c) => { c.ellipse(exR, eyeY, eW, eH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 1.0 });
-    // Burning ember pupils — deep orange-red, pulsing
-    neonOrb(ctx, exL, eyeY, eW * 0.42 * breathe, '#FF3300', 1.6);
-    neonOrb(ctx, exR, eyeY, eW * 0.42 * breathe, '#FF3300', 1.6);
-
-    // Nasal bridge — angular V-notch
-    neonStroke(ctx, (c) => {
-        c.moveTo(-r * 0.1, -r * 0.08);
-        c.lineTo(0, r * 0.1);
-        c.lineTo(r * 0.1, -r * 0.08);
-    }, e.color, { width: 1.2, intensity: 0.45, glow: false, core: false });
-
-    // Mouth — gaping void with 5 tooth dividers
-    const mY = r * 0.5, mW = r * 0.44, mH = r * 0.165;
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(2, 2, 6, 0.94)';
-    ctx.beginPath(); ctx.ellipse(0, mY, mW, mH, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    neonStroke(ctx, (c) => { c.ellipse(0, mY, mW, mH, 0, 0, Math.PI * 2); }, e.color, { width: 1.5, intensity: 0.88 });
+    neonStroke(ctx, (c) => { c.ellipse(m.x, m.y, mw, mh, 0, 0, TAU); }, e.color, { width: 1.5, intensity: 0.88 });
     for (let ti = 0; ti < 5; ti++) {
-        const tx = -mW * 0.72 + (ti / 4) * mW * 1.44;
-        neonStroke(ctx, (c) => { c.moveTo(tx, mY - mH * 0.88); c.lineTo(tx, mY + mH * 0.88); }, '#ffffff', { width: 0.8, intensity: 0.42, glow: false, core: false });
+        const tx = m.x + ((ti / 4) - 0.5) * mw * 1.5;
+        neonStroke(ctx, (c) => { c.moveTo(tx, m.y - mh * 0.85); c.lineTo(tx, m.y + mh * 0.85); }, '#ffffff', { width: 0.8, intensity: 0.42, glow: false, core: false });
     }
 
-    // Cheek scarification — 3 parallel diagonal cuts per side
-    for (let si = 0; si < 3; si++) {
-        const sy = -r * 0.06 + si * r * 0.2;
-        neonStroke(ctx, (c) => { c.moveTo(-r * 0.66, sy - r * 0.04); c.lineTo(-r * 0.4, sy + r * 0.04); }, e.color, { width: 1, intensity: 0.36, glow: false, core: false });
-        neonStroke(ctx, (c) => { c.moveTo( r * 0.66, sy - r * 0.04); c.lineTo( r * 0.4, sy + r * 0.04); }, e.color, { width: 1, intensity: 0.36, glow: false, core: false });
+    // Cheek scarification — shallow cuts riding the recessed rim.
+    for (const s of [-1, 1]) {
+        for (let si = 0; si < 3; si++) {
+            const yy = -0.05 + si * 0.2;
+            const a = P(s * 0.62, yy - 0.04, -0.22), b = P(s * 0.40, yy + 0.04, -0.06);
+            neonStroke(ctx, (c) => { c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); }, e.color, { width: 1, intensity: 0.34, glow: false, core: false });
+        }
     }
+
+    // Stake / plinth base — driven into the ground beneath the mask.
+    const sl = P(-0.14, 1.18, 0.02), sTip = P(0, 1.56, 0.06), sr = P(0.14, 1.18, 0.02);
+    neonStroke(ctx, (c) => { c.moveTo(sl.x, sl.y); c.lineTo(sTip.x, sTip.y); c.lineTo(sr.x, sr.y); }, e.color, { width: 2, intensity: 0.55, glow: false });
 
     ctx.restore();
 };
