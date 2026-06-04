@@ -4,7 +4,7 @@ import {
     GameStatus, Player, Enemy, Projectile, Pickup, TextParticle, VisualParticle,
     Weapon, UpgradeOption, EntityType, EnemyType, MetaState, MissionState, MissionType, MissionEntity, WaveConfig, ColorPalette, TutorialStep, Shockwave, Replica, Obstacle, GameOverUnlockedItem
 } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, PLAYER_BASE_STATS, ZOOM_LEVEL, BALANCE, DASH } from '../constants';
 import { PostProcessor } from '../services/postFx/PostProcessor';
 import { graphicsSettings } from '../services/graphicsSettings';
 import {
@@ -579,7 +579,33 @@ export const useGameEngine = (
         };
 
         const inputVec = inputSystem.getMoveVector();
-        updatePlayer(player, inputVec, frameRef.current, mission.type);
+        const dashReq = inputSystem.consumeDashRequest();
+        const mobileDashDir = inputSystem.consumeDashDirection();
+        updatePlayer(player, inputVec, frameRef.current, mission.type,
+                     { requested: dashReq, mobileDir: mobileDashDir ?? null });
+
+        // Dash activation flash (first frame: timer just set to DURATION)
+        if (player.dashTimer === DASH.DURATION) {
+            screenShakeRef.current = Math.max(screenShakeRef.current, 4);
+            particlesRef.current.push(getVisualParticle({
+                id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                pos: { ...player.pos }, velocity: { x: 0, y: 0 }, radius: 0,
+                color: '#FFFFFF', markedForDeletion: false,
+                life: 6, maxLife: 6, size: 55, decay: 0, shape: 'CIRCLE',
+                lightColor: '#FF8800', lightRadius: 90
+            }));
+        }
+        // Dash trail particles
+        if (player.dashTimer > 0 && frameRef.current % DASH.TRAIL_INTERVAL === 0) {
+            const trailColor = (Math.floor(frameRef.current / 2) % 2 === 0) ? '#FF6600' : '#FFFFFF';
+            particlesRef.current.push(getVisualParticle({
+                id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                pos: { ...player.pos }, velocity: { x: 0, y: 0 }, radius: 0,
+                color: trailColor, markedForDeletion: false,
+                life: 10, maxLife: 10, size: 30, decay: 0, shape: 'CIRCLE',
+                lightColor: '#FF6600', lightRadius: 45
+            }));
+        }
 
         camera.x = player.pos.x - (winW / ZOOM_LEVEL) / 2; camera.y = player.pos.y - (winH / ZOOM_LEVEL) / 2;
 

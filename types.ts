@@ -164,6 +164,11 @@ export interface Player extends Entity {
   // Power-up States
   kaleidoscopeTimer: number; // >0 means Kaleidoscope effect is active
 
+  // Dash State
+  dashTimer: number;    // > 0 = actively dashing (counts down from DASH.DURATION to 0)
+  dashCooldown: number; // > 0 = on cooldown (counts down from DASH.COOLDOWN to 0)
+  dashDir: Vector2;     // frozen direction vector for the current dash
+
   stats: PlayerStats;
 
   // Logic State

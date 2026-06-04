@@ -37,3 +37,12 @@ export const BALANCE = {
   XP_GROWTH_RATE: 1.35,      // 35% increase per level
   ENEMY_SCALING_RATE: 1.07, // 7% stats increase per wave
 };
+
+export const DASH = {
+  DURATION: 14,        // active dash frames (~0.23s at 60fps)
+  COOLDOWN: 120,       // cooldown frames (2s at 60fps)
+  SPEED_MULT: 5.5,     // multiplier over player.speed during dash
+  DAMAGE: 25,          // contact damage to each enemy per dash pass
+  TRAIL_INTERVAL: 2,   // spawn trail particle every N frames while dashing
+  SCREEN_SHAKE_HIT: 6, // shake magnitude on enemy contact
+};

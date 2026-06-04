@@ -32,6 +32,9 @@ const getInitialPlayer = (metaState: MetaState): Player => {
     xpPulseTimer: 0,
     healthPulseTimer: 0,
     kaleidoscopeTimer: 0,
+    dashTimer: 0,
+    dashCooldown: 0,
+    dashDir: { x: 1, y: 0 },
     weapons: [{ ...BASE_WEAPONS.spirit_lance }],
     artifacts: [],
     positionHistory: [], // Initial empty history
