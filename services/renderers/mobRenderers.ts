@@ -753,30 +753,6 @@ export const drawMirrorDjinn = (ctx: CanvasRenderingContext2D, e: Enemy, frame: 
     ctx.restore();
 };
 
-export const drawFaultLineBurrower = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    ctx.save();
-    ctx.rotate(e.rotation || 0);
-    const r = e.radius;
-    if (e.customData?.submerged) {
-        // Just a jagged glowing fault-line skating the grid.
-        ctx.globalAlpha = e.opacity ?? 0.2;
-        const segs: [Pt, Pt][] = [];
-        let px = -r * 1.6;
-        for (let i = 0; i < 6; i++) { const nx = px + r * 0.55; const ny = (Math.random() - 0.5) * r * 0.5; segs.push([{ x: px, y: 0 }, { x: nx, y: ny }]); px = nx; }
-        neonStroke(ctx, edgeTrace(segs), e.color, { width: 1.5, intensity: 0.8, glow: false });
-        ctx.globalAlpha = 1;
-    } else {
-        // Surfaced clawed striker.
-        ctx.globalAlpha = e.opacity ?? 1;
-        const claw: Pt[] = [{ x: r, y: 0 }, { x: -r * 0.3, y: -r * 0.7 }, { x: -r * 0.6, y: 0 }, { x: -r * 0.3, y: r * 0.7 }];
-        neonPoly(ctx, claw, e.color, { width: 2, fillAlpha: 0.08 });
-        neonStroke(ctx, (c) => { c.moveTo(r, 0); c.lineTo(r * 1.5, -r * 0.2); c.moveTo(r, 0); c.lineTo(r * 1.5, r * 0.2); }, '#ffffff', { width: 1.5, glow: false });
-        neonOrb(ctx, 0, 0, 3, '#ffffff', 1);
-        ctx.globalAlpha = 1;
-    }
-    ctx.restore();
-};
-
 export const drawDatamoshCorruptor = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
     ctx.save();
     const r = e.radius;
@@ -789,23 +765,6 @@ export const drawDatamoshCorruptor = (ctx: CanvasRenderingContext2D, e: Enemy, f
         neonStroke(ctx, (c) => c.rect(ox - w / 2, oy - r * 0.18, w, r * 0.36), col, { width: 1.5, glow: false, core: false });
     }
     neonOrb(ctx, 0, 0, 3, '#FF6600', 1);
-    ctx.restore();
-};
-
-export const drawAegisPhalanx = (ctx: CanvasRenderingContext2D, e: Enemy, frame: number) => {
-    ctx.save();
-    ctx.rotate(e.rotation || 0); // +X axis faces the player (the shielded front).
-    const r = e.radius;
-    // Exposed core at the back.
-    neonOrb(ctx, -r * 0.7, 0, 4, '#FFCC66', 1.2);
-    neonStroke(ctx, (c) => c.arc(0, 0, r * 0.5, 0, Math.PI * 2), e.color, { width: 1.5, glow: false });
-    // Shield slab on the front.
-    ctx.save();
-    ctx.translate(r * 0.6, 0);
-    const sh = r * 1.6, sw = r * 0.5;
-    neonPoly(ctx, [{ x: -sw / 2, y: -sh / 2 }, { x: sw / 2, y: -sh / 2 }, { x: sw / 2, y: sh / 2 }, { x: -sw / 2, y: sh / 2 }], e.color, { width: 2.5, fillAlpha: 0.12, backingAlpha: 0.7, intensity: 1.2 });
-    neonStroke(ctx, (c) => { c.moveTo(0, -sh * 0.25); c.lineTo(0, sh * 0.25); c.moveTo(-sw * 0.2, 0); c.lineTo(sw * 0.2, 0); }, '#ffffff', { width: 1.5, glow: false });
-    ctx.restore();
     ctx.restore();
 };
 
