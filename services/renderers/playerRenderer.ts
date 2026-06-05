@@ -214,8 +214,9 @@ export const drawPlayer = (
     runAttachments(true);
 
     // --- PLAYER BODY (Octahedron shell) ---
-    const scale = 22;
-    const vertices = [{ x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 }, { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 }, { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 }];
+    // Shape is morphed per-weapon (vertex displacement) and may breathe with cadence.
+    const scale = 22 * (1 + bodyStyle.breath * Math.sin(t * 1.5));
+    const vertices = bodyStyle.shellVerts;
     const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
     ctx.lineWidth = bodyStyle.shellLineWidth; ctx.lineJoin = 'round';
@@ -254,24 +255,44 @@ export const drawPlayer = (
     // FRONT PASS (in front of body, before the core)
     runAttachments(false);
 
-    // --- CORE (Icosahedron) ---
+    // --- CORE (Icosahedron) — morphed per signature weapon ---
     {
-        let coreColor = COLORS.orange; let s = 3.5;
+        const cs = bodyStyle.core;
+        let fill = cs.fill; let wire = cs.wire;
+        let scaleMul = 1; let jitterX = 0; let jitterY = 0;
         if (activeMissionType === MissionType.SHADOW_STEP) {
-            coreColor = (Math.floor(frame / 10) % 2 === 0) ? '#FF0000' : '#444444';
-        } else if (bodyStyle.coreTint) {
-            if (player.weapons.some(w => w.id === 'cyber_kora')) s = 3.5 + Math.sin(t * 10) * 1;
-            coreColor = bodyStyle.coreTint;
+            fill = (Math.floor(frame / 10) % 2 === 0) ? '#FF0000' : '#444444';
+            wire = 'rgba(255, 200, 100, 0.5)';
+        } else {
+            if (cs.pulse) scaleMul = 1 + Math.sin(frame * cs.pulseSpeed) * cs.pulse;
+            if (cs.jitter) { jitterX = (Math.random() - 0.5) * cs.jitter; jitterY = (Math.random() - 0.5) * cs.jitter; }
         }
+        const s = cs.scale * scaleMul;
 
         const rawVerts = [{ x: 0, y: 1, z: 1.618 }, { x: 0, y: 1, z: -1.618 }, { x: 0, y: -1, z: 1.618 }, { x: 0, y: -1, z: -1.618 }, { x: 1, y: 1.618, z: 0 }, { x: 1, y: -1.618, z: 0 }, { x: -1, y: 1.618, z: 0 }, { x: -1, y: -1.618, z: 0 }, { x: 1.618, y: 0, z: 1 }, { x: 1.618, y: 0, z: -1 }, { x: -1.618, y: 0, z: 1 }, { x: -1.618, y: 0, z: -1 }];
         const faces = [[0, 10, 2], [0, 2, 8], [0, 8, 4], [0, 4, 6], [0, 6, 10], [3, 9, 5], [3, 5, 7], [3, 7, 11], [3, 11, 1], [3, 1, 9], [2, 10, 7], [2, 7, 5], [2, 5, 8], [8, 5, 9], [8, 9, 4], [4, 9, 1], [4, 1, 6], [6, 1, 11], [6, 11, 10], [10, 11, 7]];
-        const coreSpin = frame * 0.05; const spinCos = Math.cos(coreSpin); const spinSin = Math.sin(coreSpin);
-        const projVertsIco = rawVerts.map(v => { const rx = v.x * spinCos - v.z * spinSin; const rz = v.x * spinSin + v.z * spinCos; return projectPlayer3D(rx * s, v.y * s, rz * s); });
-        const faceList = faces.map(f => { const v0 = projVertsIco[f[0]]; const v1 = projVertsIco[f[1]]; const v2 = projVertsIco[f[2]]; const depth = (v0.depth + v1.depth + v2.depth) / 3; return { v0, v1, v2, depth }; });
+        const coreSpin = frame * 0.05 * cs.spin; const spinCos = Math.cos(coreSpin); const spinSin = Math.sin(coreSpin);
+        const projVertsIco = rawVerts.map(v => {
+            const rx = v.x * spinCos - v.z * spinSin; const rz = v.x * spinSin + v.z * spinCos;
+            const p = projectPlayer3D(rx * s * cs.sx, v.y * s * cs.sy, rz * s * cs.sz);
+            return { x: p.x + jitterX, y: p.y + jitterY, depth: p.depth };
+        });
+        const faceList = faces.map((f, fi) => { const v0 = projVertsIco[f[0]]; const v1 = projVertsIco[f[1]]; const v2 = projVertsIco[f[2]]; const depth = (v0.depth + v1.depth + v2.depth) / 3; return { v0, v1, v2, depth, fi }; });
         faceList.sort((a, b) => b.depth - a.depth);
-        ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)'; ctx.lineWidth = 1; ctx.fillStyle = coreColor;
-        faceList.forEach(f => { ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.fill(); ctx.stroke(); });
+        ctx.strokeStyle = wire; ctx.lineWidth = 1;
+        faceList.forEach(f => {
+            let v0 = f.v0, v1 = f.v1, v2 = f.v2;
+            // Shard-split: explode each face outward from the core center.
+            if (cs.shard) {
+                const cxF = (v0.x + v1.x + v2.x) / 3, cyF = (v0.y + v1.y + v2.y) / 3;
+                const d = Math.hypot(cxF, cyF) || 1; const ox = (cxF / d) * cs.shard, oy = (cyF / d) * cs.shard;
+                v0 = { x: v0.x + ox, y: v0.y + oy, depth: v0.depth };
+                v1 = { x: v1.x + ox, y: v1.y + oy, depth: v1.depth };
+                v2 = { x: v2.x + ox, y: v2.y + oy, depth: v2.depth };
+            }
+            ctx.fillStyle = cs.prism ? `hsl(${(f.fi * 18 + frame * 2) % 360}, 90%, 60%)` : fill;
+            ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+        });
     }
 
     // Extra Lives Satellites

@@ -481,34 +481,115 @@ export const PlayerAttachmentRegistry: Record<string, AttachmentRenderer> = {
 };
 
 // ---------------------------------------------------------------------------
-// Body-structural growth + secondary artifact/stat traits
+// Body-structural growth: vertex SHAPE morphs + per-weapon CORE morphs
 // ---------------------------------------------------------------------------
+
+export interface Vec3 { x: number; y: number; z: number; }
+
+// Per-weapon CORE (icosahedron) transformation. The core reflects the player's
+// most-invested ("signature") weapon — the heart of the build. Animated terms
+// (pulse / jitter / prism color) are applied in the renderer from these params.
+export interface CoreStyle {
+    scale: number;                 // base size
+    sx: number; sy: number; sz: number; // per-axis stretch (spindle / disc / smear)
+    spin: number;                  // spin-speed multiplier (1 = default)
+    fill: string;
+    wire: string;
+    shard: number;                 // px each face explodes outward (shard-split)
+    pulse: number;                 // size-pulse amplitude (fraction)
+    pulseSpeed: number;
+    prism: boolean;                // rainbow per-face fill
+    jitter: number;                // px positional stutter
+}
 
 export interface BodyStyle {
     shellColor: string;     // octahedron wireframe stroke
     shellLineWidth: number;
     plate: number;          // 0..1 armor-plate fill strength on near faces
     spike: number;          // spike length in px out from vertices (HIGH only)
-    coreTint?: string;      // optional core color override (non-jammed)
+    shellVerts: Vec3[];     // 6 octahedron verts, morphed by equipped weapons
+    breath: number;         // whole-shell scale-pulse amplitude
+    core: CoreStyle;
 }
 
+// Base octahedron vertices (unit; scaled by ~22 in the renderer). Index order:
+// 0:+z 1:-z 2:+x(aim/forward) 3:-x(rear) 4:+y(top) 5:-y(bottom).
+const BASE_SHELL_VERTS: Vec3[] = [
+    { x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 },
+    { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 },
+    { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 },
+];
+
+// Per-weapon vertex displacement: each entry scales a vertex outward along its
+// own axis by (1 + grow * level). Negative = implode. Multiple weapons stack,
+// so a loadout produces a unique, asymmetric silhouette.
+const SHELL_MORPHS: Record<string, { idx: number; grow: number }[]> = {
+    spirit_lance: [{ idx: 2, grow: 0.11 }],                                   // forward dart/lance
+    cyber_kora: [{ idx: 0, grow: 0.06 }, { idx: 1, grow: 0.06 }],             // pointed front/back (jagged via spikes)
+    void_aura: [{ idx: 0, grow: -0.03 }, { idx: 1, grow: -0.03 }, { idx: 2, grow: -0.03 }, { idx: 3, grow: -0.03 }, { idx: 4, grow: -0.03 }, { idx: 5, grow: -0.03 }], // implode/compact
+    nanite_swarm: [{ idx: 4, grow: 0.09 }, { idx: 5, grow: 0.09 }],           // tall segmented hull
+    solar_chakram: [{ idx: 0, grow: 0.06 }, { idx: 1, grow: 0.06 }, { idx: 2, grow: 0.05 }, { idx: 3, grow: 0.05 }, { idx: 4, grow: -0.05 }, { idx: 5, grow: -0.05 }], // flattened disc
+    void_wake: [{ idx: 3, grow: 0.12 }],                                      // rear tail/tendril
+    drum_echo: [{ idx: 4, grow: 0.03 }, { idx: 5, grow: 0.03 }],              // slight swell (+ breathing)
+    paradox_pendulum: [{ idx: 2, grow: 0.04 }, { idx: 3, grow: 0.04 }],       // stretched fore/aft
+    kaleidoscope_gaze: [{ idx: 0, grow: 0.04 }],                              // faceted front
+    fractal_bloom: [{ idx: 0, grow: 0.04 }, { idx: 1, grow: 0.04 }, { idx: 2, grow: 0.04 }, { idx: 3, grow: 0.04 }, { idx: 4, grow: 0.04 }, { idx: 5, grow: 0.04 }], // bristling growth
+    ancestral_resonance: [{ idx: 4, grow: 0.13 }, { idx: 0, grow: 0.06 }],    // crown / horns
+};
+
+const defaultCore = (): CoreStyle => ({
+    scale: 3.5, sx: 1, sy: 1, sz: 1, spin: 1,
+    fill: COLORS.orange, wire: 'rgba(255, 200, 100, 0.5)',
+    shard: 0, pulse: 0, pulseSpeed: 0.1, prism: false, jitter: 0,
+});
+
+// Core morph for the signature (highest-level) weapon, tinted by its augment.
+const coreStyleFor = (w: Weapon): CoreStyle => {
+    const c = defaultCore();
+    switch (w.id) {
+        case 'spirit_lance': c.sx = 0.7; c.sy = 1.7; c.sz = 0.7; c.scale = 3.3; c.fill = w.augment === 'PHASE_DRILL' ? '#c77dff' : '#ffd9b3'; break; // spindle
+        case 'cyber_kora': c.fill = '#00FFFF'; c.spin = 2.2; c.pulse = 0.22; c.pulseSpeed = 0.5; break;                                              // flickering pulse
+        case 'void_aura': c.fill = '#0a0014'; c.wire = augColor(w, '#cc66ff'); c.scale = 3.1; c.pulse = 0.14; c.pulseSpeed = 0.08; break;            // hollow void
+        case 'nanite_swarm': c.fill = w.augment === 'HUNTER_PROTOCOL' ? '#FF3030' : '#00FF00'; c.shard = 3.5; c.spin = 1.6; break;                   // shard-split
+        case 'solar_chakram': c.sx = 1.5; c.sz = 1.5; c.sy = 0.45; c.fill = '#FFD700'; c.spin = 3; break;                                            // fast gold disc
+        case 'void_wake': c.sx = 1.7; c.fill = augColor(w, '#FF00FF'); c.spin = 1.3; break;                                                          // comet smear
+        case 'drum_echo': c.fill = '#3399FF'; c.pulse = 0.4; c.pulseSpeed = 0.18; break;                                                             // struck-drum throb
+        case 'paradox_pendulum': c.fill = '#FFD700'; c.jitter = 3.5; c.spin = 1.5; break;                                                            // time stutter
+        case 'kaleidoscope_gaze': c.prism = true; c.spin = 2; c.fill = '#FFFFFF'; break;                                                             // prism
+        case 'fractal_bloom': c.fill = '#00FFFF'; c.shard = 2; c.spin = 1.4; break;                                                                  // subdivided
+        case 'ancestral_resonance': c.fill = augColor(w, '#00FF00'); c.scale = 3.8; c.pulse = 0.5; c.pulseSpeed = 0.06; break;                       // huge throb
+    }
+    c.scale *= 0.9 + w.level * 0.025; // signature weapon investment grows the heart
+    return c;
+};
+
 // Folds equipped weapons + artifacts/stats into one body style per frame.
-// Weapons are primary (they also tint the shell + grow spikes); artifacts/stats
-// are subtle, cheap, body-level traits — never competing orbiting geometry.
+// Weapons drive shell tint, vertex morphs, spikes, and the core; artifacts/stats
+// add subtle plating/tints. Built once per frame, no orbiting geometry here.
 export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyStyle => {
     let shellColor = COLORS.white;
     let shellLineWidth = 1.5;
     let plate = 0;
     let spike = 0;
-    let coreTint: string | undefined;
+    let breath = 0;
 
-    // Weapons: tint shell toward weapon colors, grow spikes with total level.
+    // Morphed shell vertices (clone the base so we never mutate it).
+    const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
+
     let totalLevel = 0;
+    let topWeapon: Weapon | null = null;
     for (const w of player.weapons) {
         totalLevel += w.level;
         // gentle blend so multiple weapons mix without washing out the white.
         shellColor = lerpColor(shellColor, w.color, 0.12);
-        if (w.id === 'cyber_kora') coreTint = '#00FFFF';
+        if (!topWeapon || w.level > topWeapon.level) topWeapon = w;
+        // accumulate vertex shape morph
+        const morph = SHELL_MORPHS[w.id];
+        if (morph) for (const m of morph) {
+            const f = 1 + m.grow * w.level;
+            shellVerts[m.idx].x *= f; shellVerts[m.idx].y *= f; shellVerts[m.idx].z *= f;
+        }
+        if (w.id === 'drum_echo') breath = Math.max(breath, 0.05 + w.level * 0.005);
     }
     if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
 
@@ -518,8 +599,10 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     if (arts.includes('data_siphon')) shellColor = lerpColor(shellColor, '#00FFFF', 0.25);
     if (arts.includes('ancestral_focus')) shellColor = lerpColor(shellColor, COLORS.orange, 0.2);
 
-    // Stats: armor thickens/plates the shell; brighter when armored.
+    // Stats: armor thickens/plates the shell.
     if (player.stats.armor > 0) { shellLineWidth += Math.min(1.0, player.stats.armor * 0.15); plate += Math.min(0.5, player.stats.armor * 0.1); }
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, coreTint };
+    const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
+
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, core };
 };
