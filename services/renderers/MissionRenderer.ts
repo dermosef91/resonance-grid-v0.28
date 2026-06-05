@@ -259,7 +259,7 @@ export const drawMissionEntity = (
                 const alpha = 0.4 + Math.sin(t * 3 + r) * 0.2;
                 neonStroke(ctx, (c) => {
                     ringPts.forEach((p, i) => i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y));
-                }, `rgba(150, 0, 255, ${alpha})`, { width: 2, glow: false, core: false }); // Purple pulsing
+                }, `rgba(150, 0, 255, ${alpha})`, { width: 2 }); // Purple pulsing
             }
 
             // Core Text/Symbol
@@ -278,28 +278,31 @@ export const drawMissionEntity = (
             if (player) {
                 ctx.save();
                 ctx.globalAlpha = 0.6 + Math.sin(frame * 0.2) * 0.2;
+                // Ambient glow halo behind the jittery bolt
+                neonStroke(ctx, (c) => {
+                    c.moveTo(player.pos.x, player.pos.y);
+                    c.lineTo(e.pos.x, e.pos.y);
+                }, '#00FFFF', { width: 8, intensity: 0.25, core: false });
                 drawLightningBolt(ctx, player.pos, e.pos, '#00FFFF', 2, 20);
 
                 // Draw Jittery Connection Aura around Player and Payload
                 const drawConnectionAura = (pos: { x: number, y: number }) => {
                     const layers = 2;
                     for (let i = 0; i < layers; i++) {
-                        ctx.beginPath();
                         const baseRad = 35 + (i * 8);
                         const segments = 12;
                         const offset = frame * 0.1 * (i % 2 === 0 ? 1 : -1);
-
-                        for (let j = 0; j <= segments; j++) {
-                            const ang = (j / segments) * Math.PI * 2 + offset;
-                            const r = baseRad + (Math.random() - 0.5) * 6;
-                            const px = pos.x + Math.cos(ang) * r;
-                            const py = pos.y + Math.sin(ang) * r;
-                            if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-                        }
-                        ctx.closePath();
-                        ctx.strokeStyle = i === 0 ? '#00FFFF' : 'rgba(0, 80, 255, 0.5)';
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
+                        const auraColor = i === 0 ? '#00FFFF' : 'rgba(0, 80, 255, 0.8)';
+                        neonStroke(ctx, (c) => {
+                            for (let j = 0; j <= segments; j++) {
+                                const ang = (j / segments) * Math.PI * 2 + offset;
+                                const r = baseRad + (Math.random() - 0.5) * 6;
+                                const px = pos.x + Math.cos(ang) * r;
+                                const py = pos.y + Math.sin(ang) * r;
+                                if (j === 0) c.moveTo(px, py); else c.lineTo(px, py);
+                            }
+                            c.closePath();
+                        }, auraColor, { width: 1.5 });
                     }
                 };
 
