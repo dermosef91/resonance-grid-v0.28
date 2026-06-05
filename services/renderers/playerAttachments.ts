@@ -510,6 +510,10 @@ export interface BodyStyle {
     shellVerts: Vec3[];     // 6 octahedron verts, morphed by equipped weapons
     breath: number;         // whole-shell scale-pulse amplitude
     belt: number;           // equatorial belt expansion factor (0 = none)
+    undulate: number;       // per-vertex oscillation amplitude (drum_echo)
+    faceGap: number;        // face centroid-push fraction — "barely held together" (void_aura)
+    edgeFringe: number;     // bristle spike length from edge midpoints in px (fractal_bloom)
+    stacks: number;         // ghost-ring segment count above/below shell (ancestral_resonance)
     core: CoreStyle;
 }
 
@@ -584,6 +588,10 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let spike = 0;
     let breath = 0;
     let belt = 0;
+    let undulate = 0;
+    let faceGap = 0;
+    let stacks = 0;
+    let fractalBloomLevel = 0;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -618,10 +626,15 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
                 }
             }
         }
-        if (w.id === 'drum_echo') breath = Math.max(breath, 0.05 + w.level * 0.005);
+        if (w.id === 'drum_echo') { breath = Math.max(breath, 0.05 + w.level * 0.005); undulate = Math.max(undulate, 0.012 + w.level * 0.006); }
         if (w.id === 'nanite_swarm') belt = Math.max(belt, 0.08 + w.level * 0.04);
+        if (w.id === 'void_aura') faceGap = Math.max(faceGap, 0.04 + w.level * 0.025);
+        if (w.id === 'fractal_bloom') fractalBloomLevel = w.level;
+        if (w.id === 'ancestral_resonance') stacks = Math.max(stacks, w.level >= 4 ? 2 : 1);
     }
     if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
+    const edgeFringe = fractalBloomLevel > 0 ? fractalBloomLevel * 0.55 + Math.min(4, totalLevel * 0.08) : 0;
+    if (quality === 'LOW') stacks = 0;
 
     // Artifacts (subtle traits).
     const arts = player.artifacts || [];
@@ -634,5 +647,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, faceGap, edgeFringe, stacks, core };
 };

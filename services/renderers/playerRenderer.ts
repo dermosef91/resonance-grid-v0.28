@@ -167,8 +167,10 @@ export const drawPlayer = (
     const rollingPitch = -player.distanceTraveled * 0.04;
     const yaw = player.rotation;
     const pitch = rollingPitch;
-    const roll = Math.cos(t * 0.5) * 0.1;
     const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+    const perpVel = -player.velocity.x * sinY + player.velocity.y * cosY;
+    const bankAngle = Math.max(-0.25, Math.min(0.25, perpVel * 0.05));
+    const roll = Math.cos(t * 0.5) * 0.1 + bankAngle;
     const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
     const cosR = Math.cos(roll), sinR = Math.sin(roll);
     const tilt = 0.4, cosT = Math.cos(tilt), sinT = Math.sin(tilt);
@@ -217,23 +219,36 @@ export const drawPlayer = (
     // Shape is morphed per-weapon (vertex displacement) and may breathe with cadence.
     const scale = 22 * (1 + bodyStyle.breath * Math.sin(t * 1.5));
     const vertices = bodyStyle.shellVerts;
-    const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
+    const projVerts = vertices.map((v, i) => {
+        const s = bodyStyle.undulate > 0
+            ? scale * (1 + bodyStyle.undulate * Math.sin(t * 3.0 + i * 1.3))
+            : scale;
+        return projectPlayer3D(v.x * s, v.y * s, v.z * s);
+    });
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
     ctx.lineWidth = bodyStyle.shellLineWidth; ctx.lineJoin = 'round';
     faces.forEach(f => {
-        const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
-        ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
+        const v0 = projVerts[f[0]], v1 = projVerts[f[1]], v2 = projVerts[f[2]];
+        let p0x = v0.x, p0y = v0.y, p1x = v1.x, p1y = v1.y, p2x = v2.x, p2y = v2.y;
+        if (bodyStyle.faceGap > 0) {
+            const cx = (p0x + p1x + p2x) / 3, cy = (p0y + p1y + p2y) / 3;
+            const g = bodyStyle.faceGap;
+            p0x += (p0x - cx) * g; p0y += (p0y - cy) * g;
+            p1x += (p1x - cx) * g; p1y += (p1y - cy) * g;
+            p2x += (p2x - cx) * g; p2y += (p2y - cy) * g;
+        }
+        ctx.beginPath(); ctx.moveTo(p0x, p0y); ctx.lineTo(p1x, p1y); ctx.lineTo(p2x, p2y); ctx.closePath();
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.strokeStyle = bodyStyle.shellColor;
         ctx.lineWidth = bodyStyle.shellLineWidth;
         ctx.fill(); ctx.stroke();
         // Armor plating: inset highlight on near faces (artifacts / armor stat).
         if (bodyStyle.plate > 0 && (v0.depth + v1.depth + v2.depth) < 0) {
-            const mx = (v0.x + v1.x + v2.x) / 3, my = (v0.y + v1.y + v2.y) / 3;
+            const mx = (p0x + p1x + p2x) / 3, my = (p0y + p1y + p2y) / 3;
             ctx.beginPath();
-            ctx.moveTo(mx + (v0.x - mx) * 0.6, my + (v0.y - my) * 0.6);
-            ctx.lineTo(mx + (v1.x - mx) * 0.6, my + (v1.y - my) * 0.6);
-            ctx.lineTo(mx + (v2.x - mx) * 0.6, my + (v2.y - my) * 0.6);
+            ctx.moveTo(mx + (p0x - mx) * 0.6, my + (p0y - my) * 0.6);
+            ctx.lineTo(mx + (p1x - mx) * 0.6, my + (p1y - my) * 0.6);
+            ctx.lineTo(mx + (p2x - mx) * 0.6, my + (p2y - my) * 0.6);
             ctx.closePath();
             ctx.strokeStyle = `rgba(255,255,255,${0.25 * bodyStyle.plate})`;
             ctx.lineWidth = 1;
@@ -259,6 +274,41 @@ export const drawPlayer = (
             ctx.strokeStyle = bodyStyle.shellColor;
             ctx.lineWidth = bodyStyle.shellLineWidth;
             ctx.fill(); ctx.stroke();
+        });
+    }
+
+    // Segmented body rings above/below the shell — insectoid/totem look (ancestral_resonance, HIGH only).
+    if (bodyStyle.stacks > 0) {
+        const ss = scale * 0.62;
+        const yOffs = bodyStyle.stacks >= 2 ? [-0.55, 0.72] : [0.72];
+        ctx.save();
+        ctx.globalAlpha *= 0.5;
+        yOffs.forEach(yo => {
+            const sv = vertices.map(v => projectPlayer3D(v.x * ss, v.y * ss + yo * scale, v.z * ss));
+            ctx.strokeStyle = bodyStyle.shellColor;
+            ctx.lineWidth = bodyStyle.shellLineWidth * 0.6;
+            ctx.lineJoin = 'round';
+            faces.forEach(f => {
+                ctx.beginPath();
+                ctx.moveTo(sv[f[0]].x, sv[f[0]].y); ctx.lineTo(sv[f[1]].x, sv[f[1]].y); ctx.lineTo(sv[f[2]].x, sv[f[2]].y);
+                ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill(); ctx.stroke();
+            });
+        });
+        ctx.restore();
+    }
+
+    // Edge fringe: bristle spikes from each octahedron edge midpoint outward (fractal_bloom).
+    if (bodyStyle.edgeFringe > 0) {
+        const edges: [number, number][] = [[0,2],[0,3],[0,4],[0,5],[1,2],[1,3],[1,4],[1,5],[2,4],[2,5],[3,4],[3,5]];
+        ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 0.8;
+        edges.forEach(([a, b]) => {
+            const va = vertices[a], vb = vertices[b];
+            const mx = (va.x + vb.x) * 0.5, my = (va.y + vb.y) * 0.5, mz = (va.z + vb.z) * 0.5;
+            const mLen = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+            const base = projectPlayer3D(mx * scale, my * scale, mz * scale);
+            const ext = scale + bodyStyle.edgeFringe;
+            const tip = projectPlayer3D(mx / mLen * ext, my / mLen * ext, mz / mLen * ext);
+            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
         });
     }
 
