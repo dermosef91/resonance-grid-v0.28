@@ -355,87 +355,54 @@ const drawVoidWake: AttachmentRenderer = (a, w) => {
     }
 };
 
-// DRUM ECHO -> orbiting hexagonal drum satellites. BASS_DROP: orange pulse.
-// SOLAR_FLARE: yellow with emitted spikes.
-const drawDrumEcho: AttachmentRenderer = (a, w) => {
-    const { ctx, project, t, drawBack, slotPhase, areaMult } = a;
-    const bass = w.augment === 'BASS_DROP';
-    const flare = w.augment === 'SOLAR_FLARE';
-    const stroke = bass ? '#FF4400' : (flare ? '#FFFF00' : '#0088FF');
-    const fill = bass ? 'rgba(255,68,0,0.25)' : (flare ? 'rgba(255,255,0,0.2)' : 'rgba(0,136,255,0.2)');
-    const count = lvlCount(w.level, 2, 3, 6);
-    let radius = slotRadius(a, 50) * (0.8 + w.level * 0.03) * areaMult;
-    if (bass) radius *= 0.8 + Math.abs(Math.sin(t * 1.5)) * 0.3; // slam pulse
-    const size = 7 * lvlSize(w.level);
-    for (let i = 0; i < count; i++) {
-        const ang = t * 1.4 + slotPhase + (Math.PI * 2 / count) * i;
-        const cx = Math.cos(ang) * radius, cz = Math.sin(ang) * radius;
-        const proj = project(cx, 0, cz);
-        if ((proj.depth > 0) === drawBack) {
-            drawPolyFlat(a, cx, 0, cz, size, 6, t * 2, stroke, fill);
-            if (flare) {
-                const fp = project(cx * 1.4, 0, cz * 1.4);
-                ctx.strokeStyle = '#FFEE66'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.moveTo(proj.x, proj.y); ctx.lineTo(fp.x, fp.y); ctx.stroke();
-            }
-        }
-    }
-};
+// NOTE: drum_echo (ORBITAL) and paradox_pendulum (PARADOX) intentionally have
+// no avatar attachment — those weapons already render their orbiting drums /
+// swinging pendulum on the player via the projectile renderer, so a second
+// decorative copy would just duplicate them.
 
-// PARADOX PENDULUM -> swinging arm + bob. QUANTUM_ECHO: opposed cyan phantom.
-// TEMPORAL_DRAG: violet drag trail.
-const drawParadoxPendulum: AttachmentRenderer = (a, w) => {
-    const { ctx, project, t, drawBack, areaMult } = a;
-    const drag = w.augment === 'TEMPORAL_DRAG';
-    const echo = w.augment === 'QUANTUM_ECHO';
-    const armLen = (40 + w.level * 4) * areaMult;
-    const sweep = Math.sin(t * 1.8) * (0.6 + w.level * 0.04);
-    const drawArm = (angle: number, color: string, phantom: boolean) => {
-        const bx = Math.sin(angle) * armLen, bz = Math.cos(angle) * armLen * 0.4;
-        const pivot = project(0, -8, 0);
-        const bob = project(bx, 24, bz);
-        if ((bob.depth > 0) !== drawBack) return;
-        ctx.strokeStyle = color; ctx.lineWidth = phantom ? 1.5 : 2.5; ctx.globalAlpha = phantom ? 0.5 : 1;
-        ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(bob.x, bob.y); ctx.stroke();
-        if (drag) {
-            ctx.strokeStyle = 'rgba(170,0,170,0.3)';
-            for (let s = 1; s <= 3; s++) {
-                const ta = angle - sweep * 0.15 * s;
-                const tb = project(Math.sin(ta) * armLen, 24, Math.cos(ta) * armLen * 0.4);
-                ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(tb.x, tb.y); ctx.stroke();
-            }
-        }
-        drawDiamond(ctx, bob.x, bob.y, 7 * lvlSize(w.level), color, phantom ? 'rgba(0,255,255,0.3)' : '#FFE9A8');
-        ctx.globalAlpha = 1;
-    };
-    drawArm(sweep, drag ? '#AA00AA' : '#FFD700', false);
-    if (echo) drawArm(sweep + Math.PI, '#00FFFF', true);
-};
-
-// KALEIDOSCOPE GAZE -> prismatic lens halo above the avatar with RGB rays.
-// TRI_OPTIC_PRISM: 3 lenses. CHROMA_STASIS: cyan crystalline lens.
+// KALEIDOSCOPE GAZE -> a small, semi-transparent prismatic bullseye reticle
+// floating in the aim direction (player-local +x maps to the facing angle).
+// TRI_OPTIC_PRISM: faint side reticles. CHROMA_STASIS: cyan monochrome.
 const drawKaleidoscope: AttachmentRenderer = (a, w) => {
-    const { ctx, project, t, drawBack, slotPhase } = a;
+    const { ctx, project, frame, drawBack } = a;
     const tri = w.augment === 'TRI_OPTIC_PRISM';
     const stasis = w.augment === 'CHROMA_STASIS';
-    const lenses = tri ? 3 : 1;
-    const radius = 22;
-    const rayLen = 18 + w.level * 3;
-    const rgb = stasis ? ['#00FFFF', '#00FFFF', '#00FFFF'] : ['#FF0044', '#00FF44', '#4488FF'];
-    for (let l = 0; l < lenses; l++) {
-        const la = slotPhase + (tri ? (l - 1) * 0.8 : 0);
-        const cx = Math.sin(la) * 18, cz = Math.cos(la) * 8;
-        const proj = project(cx, -30, cz);
+    const dist = 44;            // forward offset along the aim direction
+    const baseR = 6 + w.level * 0.7;
+    const cols = stasis
+        ? ['rgba(0,255,255,', 'rgba(0,255,255,', 'rgba(0,255,255,']
+        : ['rgba(255,40,90,', 'rgba(60,255,140,', 'rgba(90,150,255,'];
+
+    // angle offsets for the reticle and (optional) tri-optic side reticles
+    const offsets = tri ? [-0.5, 0, 0.5] : [0];
+    for (const off of offsets) {
+        const fx = Math.cos(off) * dist, fz = Math.sin(off) * dist;
+        const proj = project(fx, 0, fz);
         if ((proj.depth > 0) !== drawBack) continue;
-        // Lens body
-        drawPolyFlat(a, cx, -30, cz, radius * lvlSize(w.level), 6, t * 1.5, stasis ? '#00FFFF' : '#FFFFFF', 'rgba(255,255,255,0.12)');
-        // RGB split rays
-        for (let r = 0; r < 3; r++) {
-            const ra = t * 2 + (r / 3) * Math.PI * 2;
-            const tip = project(cx + Math.cos(ra) * rayLen, -30, cz + Math.sin(ra) * rayLen);
-            ctx.strokeStyle = rgb[r]; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(proj.x, proj.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        const main = off === 0;
+        const fade = main ? 1 : 0.45;
+        ctx.save();
+        ctx.translate(proj.x, proj.y);
+        ctx.lineWidth = 1.25;
+        // concentric prismatic rings (camera-facing, flattened slightly)
+        for (let i = 0; i < 3; i++) {
+            const r = baseR * (1 - i * 0.3) * (main ? 1 : 0.7);
+            if (r <= 0.5) continue;
+            ctx.strokeStyle = cols[i] + (0.4 * fade) + ')';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, r, r * 0.6, 0, 0, Math.PI * 2);
+            ctx.stroke();
         }
+        // crosshair ticks + center dot
+        ctx.strokeStyle = `rgba(255,255,255,${0.5 * fade})`;
+        const tick = baseR * 1.15;
+        ctx.beginPath();
+        ctx.moveTo(-tick, 0); ctx.lineTo(-tick * 0.5, 0);
+        ctx.moveTo(tick * 0.5, 0); ctx.lineTo(tick, 0);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(255,255,255,${0.6 * fade})`;
+        ctx.beginPath(); ctx.arc(0, 0, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
     }
 };
 
@@ -508,8 +475,6 @@ export const PlayerAttachmentRegistry: Record<string, AttachmentRenderer> = {
     nanite_swarm: drawNaniteSwarm,
     solar_chakram: drawSolarChakram,
     void_wake: drawVoidWake,
-    drum_echo: drawDrumEcho,
-    paradox_pendulum: drawParadoxPendulum,
     kaleidoscope_gaze: drawKaleidoscope,
     fractal_bloom: drawFractalBloom,
     ancestral_resonance: drawAncestralResonance,
