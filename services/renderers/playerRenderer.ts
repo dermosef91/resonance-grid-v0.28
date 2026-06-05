@@ -241,6 +241,27 @@ export const drawPlayer = (
         }
     });
 
+    // Equatorial belt: 4 diagonal facets (NE/NW/SW/SE) pushed outward from the
+    // mid-ring, forming a wider bipyramid/gem shape (nanite_swarm).
+    if (bodyStyle.belt > 0) {
+        const beltW = bodyStyle.belt;
+        const beltPairs: [number, number][] = [[0, 2], [0, 3], [1, 2], [1, 3]];
+        beltPairs.forEach(([a, b]) => {
+            const va = vertices[a], vb = vertices[b];
+            const bx = (va.x + vb.x) * 0.5 * (1 + beltW);
+            const bz = (va.z + vb.z) * 0.5 * (1 + beltW);
+            const bMid = projectPlayer3D(bx * scale, 0, bz * scale);
+            const pA = projVerts[a], pB = projVerts[b];
+            ctx.beginPath();
+            ctx.moveTo(pA.x, pA.y); ctx.lineTo(bMid.x, bMid.y); ctx.lineTo(pB.x, pB.y);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.strokeStyle = bodyStyle.shellColor;
+            ctx.lineWidth = bodyStyle.shellLineWidth;
+            ctx.fill(); ctx.stroke();
+        });
+    }
+
     // Structural spikes growing from vertices with total weapon investment (HIGH only).
     if (bodyStyle.spike > 0) {
         ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1.5;
