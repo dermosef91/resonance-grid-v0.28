@@ -35,6 +35,14 @@ const ADVANCED_MISSIONS = [
     MissionType.RESCUE
 ];
 
+// These missions are only allowed to spawn from Wave 8 onwards.
+const LATE_ONLY_MISSIONS = new Set<MissionType>([
+    MissionType.SOLAR_STORM,
+    MissionType.THE_GREAT_FILTER,
+    MissionType.RESCUE,
+    MissionType.EVENT_HORIZON,
+]);
+
 function shuffleArray<T>(array: T[]): T[] {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -57,11 +65,16 @@ export const generateRunWaves = (): WaveConfig[] => {
     const remainingSimple = simplePool.slice(1);
     const combinedPool = shuffleArray([...remainingSimple, ...advancedPool]);
 
-    const m2 = combinedPool[0];
-    const m3 = combinedPool[1];
-    const m4 = combinedPool[2];
-    const m5 = combinedPool[3];
-    const m6 = combinedPool[4] || simplePool[0]; // Fallback
+    // Wave 4 (m2) happens before Wave 8, so it must not pick a late-only mission
+    // (Solar Storm, The Great Filter, Rescue, Event Horizon).
+    const m2Index = combinedPool.findIndex(t => !LATE_ONLY_MISSIONS.has(t));
+    const m2 = combinedPool.splice(m2Index, 1)[0];
+
+    // Remaining waves (8, 10, 14, 17) can be anything.
+    const m3 = combinedPool[0];
+    const m4 = combinedPool[1];
+    const m5 = combinedPool[2];
+    const m6 = combinedPool[3] || simplePool[0]; // Fallback
 
     // Helper to scale mission parameters based on "difficulty" (1-5)
     const getParam = (type: MissionType, difficulty: number): number => {
