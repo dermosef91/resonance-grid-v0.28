@@ -54,6 +54,16 @@ export const useGameEngine = (
     const postFxRef = useRef<PostProcessor | null>(null);
     const postFxFailedRef = useRef(false);
 
+    // Cached 2D context so we don't re-fetch it via getContext() every frame.
+    const ctx2dRef = useRef<CanvasRenderingContext2D | null>(null);
+
+    // Last-pushed signatures for HUD state, so we only trigger a React re-render
+    // when the displayed data actually changes (these used to fire every frame).
+    const lastInventorySigRef = useRef('');
+    const lastArtifactsSigRef = useRef('');
+    const lastWaveInfoSigRef = useRef('');
+    const lastBossSigRef = useRef('');
+
     // Destructure everything from the Game State Hook
     const gameState = useGameState(metaState);
     const {
@@ -154,6 +164,11 @@ export const useGameEngine = (
 
     const resetGame = useCallback(() => {
         resetRefs();
+        // Force the HUD-sync change detection to re-push on the next frame.
+        lastInventorySigRef.current = '';
+        lastArtifactsSigRef.current = '';
+        lastWaveInfoSigRef.current = '';
+        lastBossSigRef.current = '';
         initMission(0);
         setUiStats({ health: 100, maxHealth: 100, level: 1, xp: 0, nextXp: 10, score: 0, currency: 0, runTime: 0 });
         setWaveInfo({ id: 1, mission: { ...missionRef.current } });
@@ -1004,13 +1019,40 @@ export const useGameEngine = (
         // Cleanup Mission Entities
         missionEntitiesRef.current = missionEntitiesRef.current.filter((e: any) => !e.markedForDeletion);
 
-        setActiveBosses(currentBosses);
+        // Boss HUD: re-push only when the set of bosses or their health changes
+        // (empty between fights -> stable signature -> no re-render).
+        let bossSig = '';
+        for (const b of currentBosses) bossSig += `${b.id}:${Math.ceil(b.health)};`;
+        if (bossSig !== lastBossSigRef.current) {
+            lastBossSigRef.current = bossSig;
+            setActiveBosses(currentBosses);
+        }
+
         if (frameRef.current % 15 === 0) {
             setUiStats({ health: player.health, maxHealth: player.maxHealth, level: player.level, xp: player.xp, nextXp: player.nextLevelXp, score: scoreRef.current, currency: sessionCurrencyRef.current, runTime: Math.floor(frameRef.current / 60) });
         }
-        setWaveInfo({ id: currentWave.id, boss: currentWave.boss, mission: { ...missionRef.current } });
-        setInventory([...player.weapons]);
-        setArtifacts([...player.artifacts]);
+
+        // Wave/mission HUD: signature covers every field the HUD actually reads.
+        const m = missionRef.current;
+        const waveInfoSig = `${currentWave.id}|${currentWave.boss || ''}|${m.type}|${m.stage || ''}|${m.progress}|${m.total}|${m.description || ''}|${m.isComplete ? 1 : 0}|${m.customData?.solarData?.state || ''}`;
+        if (waveInfoSig !== lastWaveInfoSigRef.current) {
+            lastWaveInfoSigRef.current = waveInfoSig;
+            setWaveInfo({ id: currentWave.id, boss: currentWave.boss, mission: { ...m } });
+        }
+
+        // Inventory/artifacts change only on level-up/pickup/expiry, not per frame.
+        let inventorySig = '';
+        for (const w of player.weapons) inventorySig += `${w.id}:${w.level}:${w.augment || ''}:${w.expiresAt || ''}|`;
+        if (inventorySig !== lastInventorySigRef.current) {
+            lastInventorySigRef.current = inventorySig;
+            setInventory([...player.weapons]);
+        }
+
+        const artifactsSig = player.artifacts.join(',');
+        if (artifactsSig !== lastArtifactsSigRef.current) {
+            lastArtifactsSigRef.current = artifactsSig;
+            setArtifacts([...player.artifacts]);
+        }
         audioEngine.updateWeaponMix(player.weapons);
 
         audioEngine.forceBreakdown = missionRef.current.type === MissionType.SHADOW_STEP;
@@ -1041,7 +1083,11 @@ export const useGameEngine = (
             if (glitchIntensityRef.current > 0.1) glitchIntensityRef.current *= 0.9; else glitchIntensityRef.current = 0;
 
             if (canvasRef.current && status !== 'MENU') {
-                const ctx = canvasRef.current.getContext('2d');
+                let ctx = ctx2dRef.current;
+                if (!ctx || ctx.canvas !== canvasRef.current) {
+                    ctx = canvasRef.current.getContext('2d');
+                    ctx2dRef.current = ctx;
+                }
                 if (ctx) {
                     let targets: { pos: { x: number, y: number }, color: string, label?: string }[] = [];
                     const m = missionRef.current;

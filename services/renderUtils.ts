@@ -17,8 +17,14 @@ export const hexToRgbStruct = (hex: string) => {
     };
 };
 
-export const parseColorToRgb = (color: string): { r: number, g: number, b: number } | null => {
-    if (!color) return null;
+// Colours come from a small, fixed palette but parseColorToRgb is called for
+// every light source / renderer every frame. Memoize results (the returned
+// objects are treated as read-only by all callers) to skip the repeated
+// string parsing and allocation. The cache is naturally bounded by the number
+// of distinct colour strings in the game.
+const _rgbCache = new Map<string, { r: number, g: number, b: number } | null>();
+
+const _parseColorToRgb = (color: string): { r: number, g: number, b: number } | null => {
     if (color.startsWith('#')) {
         return hexToRgbStruct(color);
     }
@@ -29,6 +35,15 @@ export const parseColorToRgb = (color: string): { r: number, g: number, b: numbe
         }
     }
     return null;
+};
+
+export const parseColorToRgb = (color: string): { r: number, g: number, b: number } | null => {
+    if (!color) return null;
+    const cached = _rgbCache.get(color);
+    if (cached !== undefined) return cached;
+    const result = _parseColorToRgb(color);
+    _rgbCache.set(color, result);
+    return result;
 };
 
 export const rgbToHex = (r: number, g: number, b: number) => {
