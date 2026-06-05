@@ -510,6 +510,10 @@ export interface BodyStyle {
     shellVerts: Vec3[];     // 6 octahedron verts, morphed by equipped weapons
     breath: number;         // whole-shell scale-pulse amplitude
     belt: number;           // equatorial belt expansion factor (0 = none)
+    undulate: number;       // per-frame asymmetric y-axis wobble amplitude (0 = none)
+    bulge: number;          // face-centroid outward push fraction → rounded blob (0 = none)
+    bevel: number;          // 0..~0.35 edge fraction for truncated vertex cap quads (0 = none)
+    segments: number;       // stacked body copies → totem/insectoid (1 = single)
     core: CoreStyle;
 }
 
@@ -584,6 +588,10 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let spike = 0;
     let breath = 0;
     let belt = 0;
+    let undulate = 0;
+    let bulge = 0;
+    let bevel = 0;
+    let segments = 1;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -618,8 +626,18 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
                 }
             }
         }
-        if (w.id === 'drum_echo') breath = Math.max(breath, 0.05 + w.level * 0.005);
-        if (w.id === 'nanite_swarm') belt = Math.max(belt, 0.08 + w.level * 0.04);
+        if (w.id === 'drum_echo') {
+            breath = Math.max(breath, 0.05 + w.level * 0.005);
+            segments = Math.max(segments, quality === 'HIGH' ? 3 : 2); // stacked totem body
+        }
+        if (w.id === 'nanite_swarm') {
+            belt = Math.max(belt, 0.08 + w.level * 0.04);
+            bevel = Math.max(bevel, Math.min(0.35, 0.08 + w.level * 0.03)); // truncated mechanical tips
+        }
+        if (w.id === 'void_aura') {
+            undulate = Math.max(undulate, 0.04 + w.level * 0.004); // living wobble
+            bulge = Math.max(bulge, 0.10 + w.level * 0.02);        // rounded organic blob
+        }
     }
     if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
 
@@ -634,5 +652,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, bulge, bevel, segments, core };
 };

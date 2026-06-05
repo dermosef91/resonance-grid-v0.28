@@ -215,62 +215,118 @@ export const drawPlayer = (
 
     // --- PLAYER BODY (Octahedron shell) ---
     // Shape is morphed per-weapon (vertex displacement) and may breathe with cadence.
+    // It may also bulge (rounded blob), bevel (truncated tips), undulate (live wobble),
+    // and stack into segments (totem body) per the equipped weapons' BodyStyle.
     const scale = 22 * (1 + bodyStyle.breath * Math.sin(t * 1.5));
     const vertices = bodyStyle.shellVerts;
-    const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
-    ctx.lineWidth = bodyStyle.shellLineWidth; ctx.lineJoin = 'round';
-    faces.forEach(f => {
-        const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
-        ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.strokeStyle = bodyStyle.shellColor;
-        ctx.lineWidth = bodyStyle.shellLineWidth;
-        ctx.fill(); ctx.stroke();
-        // Armor plating: inset highlight on near faces (artifacts / armor stat).
-        if (bodyStyle.plate > 0 && (v0.depth + v1.depth + v2.depth) < 0) {
-            const mx = (v0.x + v1.x + v2.x) / 3, my = (v0.y + v1.y + v2.y) / 3;
-            ctx.beginPath();
-            ctx.moveTo(mx + (v0.x - mx) * 0.6, my + (v0.y - my) * 0.6);
-            ctx.lineTo(mx + (v1.x - mx) * 0.6, my + (v1.y - my) * 0.6);
-            ctx.lineTo(mx + (v2.x - mx) * 0.6, my + (v2.y - my) * 0.6);
-            ctx.closePath();
-            ctx.strokeStyle = `rgba(255,255,255,${0.25 * bodyStyle.plate})`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
-    });
+    // Cyclic neighbour ring per vertex (for the truncated bevel cap quads).
+    const vertNeighbours = [[2, 4, 3, 5], [2, 4, 3, 5], [0, 4, 1, 5], [0, 4, 1, 5], [0, 2, 1, 3], [0, 2, 1, 3]];
+    ctx.lineJoin = 'round';
 
-    // Equatorial belt: 4 diagonal facets (NE/NW/SW/SE) pushed outward from the
-    // mid-ring, forming a wider bipyramid/gem shape (nanite_swarm).
-    if (bodyStyle.belt > 0) {
-        const beltW = bodyStyle.belt;
-        const beltPairs: [number, number][] = [[0, 2], [0, 3], [1, 2], [1, 3]];
-        beltPairs.forEach(([a, b]) => {
-            const va = vertices[a], vb = vertices[b];
-            const bx = (va.x + vb.x) * 0.5 * (1 + beltW);
-            const bz = (va.z + vb.z) * 0.5 * (1 + beltW);
-            const bMid = projectPlayer3D(bx * scale, 0, bz * scale);
-            const pA = projVerts[a], pB = projVerts[b];
-            ctx.beginPath();
-            ctx.moveTo(pA.x, pA.y); ctx.lineTo(bMid.x, bMid.y); ctx.lineTo(pB.x, pB.y);
-            ctx.closePath();
+    // Draws the whole shell (faces + plate + bulge + bevel + belt + spikes) once, at a
+    // given model-y offset and scale. Stacked segments reuse this; single-segment builds
+    // call it once with (0, 1, true) for byte-identical output vs. before this batch.
+    const drawBodySegment = (modelYOffset: number, segScale: number, isMain: boolean) => {
+        const full = isMain || GRAPHICS_QUALITY === 'HIGH'; // secondary LOW segments stay flat/cheap
+        // Project a unit model coord, folding in segment scale, model-y offset, and the
+        // animated undulation (y-axis only; per-vertex x/z phase = asymmetric living wobble).
+        const projV = (vx: number, vy: number, vz: number) => {
+            const undY = 1 + bodyStyle.undulate * Math.sin(t * 1.5 + vx * 0.6 + vz * 0.6);
+            return projectPlayer3D(vx * scale * segScale, vy * scale * segScale * undY + modelYOffset, vz * scale * segScale);
+        };
+        const projVerts = vertices.map(v => projV(v.x, v.y, v.z));
+
+        ctx.lineWidth = bodyStyle.shellLineWidth;
+        faces.forEach(f => {
+            const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.strokeStyle = bodyStyle.shellColor;
             ctx.lineWidth = bodyStyle.shellLineWidth;
-            ctx.fill(); ctx.stroke();
+            if (full && bodyStyle.bulge > 0) {
+                // Inflate: raise the face centroid and fan into 3 sub-triangles → rounded blob.
+                const a = vertices[f[0]], b = vertices[f[1]], c = vertices[f[2]];
+                const k = 1 + bodyStyle.bulge;
+                const pc = projV((a.x + b.x + c.x) / 3 * k, (a.y + b.y + c.y) / 3 * k, (a.z + b.z + c.z) / 3 * k);
+                const edges: [typeof v0, typeof v0][] = [[v0, v1], [v1, v2], [v2, v0]];
+                edges.forEach(([pa, pb]) => {
+                    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.lineTo(pc.x, pc.y); ctx.closePath();
+                    ctx.fill();
+                    if (GRAPHICS_QUALITY === 'HIGH') ctx.stroke(); // interior spokes only on HIGH
+                });
+                if (GRAPHICS_QUALITY !== 'HIGH') { // LOW: stroke just the outer perimeter
+                    ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath(); ctx.stroke();
+                }
+            } else {
+                ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
+                ctx.fill(); ctx.stroke();
+                // Armor plating: inset highlight on near faces (artifacts / armor stat).
+                if (full && bodyStyle.plate > 0 && (v0.depth + v1.depth + v2.depth) < 0) {
+                    const mx = (v0.x + v1.x + v2.x) / 3, my = (v0.y + v1.y + v2.y) / 3;
+                    ctx.beginPath();
+                    ctx.moveTo(mx + (v0.x - mx) * 0.6, my + (v0.y - my) * 0.6);
+                    ctx.lineTo(mx + (v1.x - mx) * 0.6, my + (v1.y - my) * 0.6);
+                    ctx.lineTo(mx + (v2.x - mx) * 0.6, my + (v2.y - my) * 0.6);
+                    ctx.closePath();
+                    ctx.strokeStyle = `rgba(255,255,255,${0.25 * bodyStyle.plate})`;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
         });
-    }
 
-    // Structural spikes growing from vertices with total weapon investment (HIGH only).
-    if (bodyStyle.spike > 0) {
-        ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1.5;
-        vertices.forEach(v => {
-            const base = projectPlayer3D(v.x * scale, v.y * scale, v.z * scale);
-            const ext = scale + bodyStyle.spike;
-            const tip = projectPlayer3D(v.x * ext, v.y * ext, v.z * ext);
-            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-        });
+        // Truncated/beveled vertex caps: cut each sharp tip into a small flat quad.
+        if (full && bodyStyle.bevel > 0) {
+            const bv = bodyStyle.bevel;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.strokeStyle = bodyStyle.shellColor;
+            ctx.lineWidth = bodyStyle.shellLineWidth;
+            vertices.forEach((v, vi) => {
+                ctx.beginPath();
+                vertNeighbours[vi].forEach((ni, k) => {
+                    const n = vertices[ni];
+                    const p = projV(v.x + (n.x - v.x) * bv, v.y + (n.y - v.y) * bv, v.z + (n.z - v.z) * bv);
+                    if (k === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+                });
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+            });
+        }
+
+        // Equatorial belt: 4 diagonal facets pushed outward from the mid-ring (main only).
+        if (isMain && bodyStyle.belt > 0) {
+            const beltW = bodyStyle.belt * (bodyStyle.bulge > 0 ? 0.5 : 1); // bulge already rounds the equator
+            const beltPairs: [number, number][] = [[0, 2], [0, 3], [1, 2], [1, 3]];
+            beltPairs.forEach(([a, b]) => {
+                const va = vertices[a], vb = vertices[b];
+                const bMid = projV((va.x + vb.x) * 0.5 * (1 + beltW), 0, (va.z + vb.z) * 0.5 * (1 + beltW));
+                const pA = projVerts[a], pB = projVerts[b];
+                ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(bMid.x, bMid.y); ctx.lineTo(pB.x, pB.y); ctx.closePath();
+                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = bodyStyle.shellLineWidth;
+                ctx.fill(); ctx.stroke();
+            });
+        }
+
+        // Structural spikes from each vertex (HIGH only, main only). When truncated, grow
+        // them from the bevel cap (radius 1-bevel) so they emerge from the flat tip cleanly.
+        if (isMain && bodyStyle.spike > 0) {
+            const baseR = bodyStyle.bevel > 0 ? 1 - bodyStyle.bevel : 1;
+            const tipR = baseR + bodyStyle.spike / scale;
+            ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1.5;
+            vertices.forEach(v => {
+                const base = projV(v.x * baseR, v.y * baseR, v.z * baseR);
+                const tip = projV(v.x * tipR, v.y * tipR, v.z * tipR);
+                ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+            });
+        }
+    };
+
+    // Stacked segments: draw farthest/topmost first so the base (main) lands on top with
+    // its belt/spikes/core. A single segment (the default) draws once, unchanged.
+    const segs = bodyStyle.segments;
+    for (let s = segs - 1; s >= 0; s--) {
+        const segScale = 1 - s * 0.22;
+        const yOff = s * (scale * 0.9);
+        drawBodySegment(yOff, segScale, s === 0);
     }
 
     // FRONT PASS (in front of body, before the core)
