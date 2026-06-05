@@ -509,6 +509,7 @@ export interface BodyStyle {
     spike: number;          // spike length in px out from vertices (HIGH only)
     shellVerts: Vec3[];     // 6 octahedron verts, morphed by equipped weapons
     breath: number;         // whole-shell scale-pulse amplitude
+    belt: number;           // equatorial belt expansion factor (0 = none)
     core: CoreStyle;
 }
 
@@ -520,21 +521,31 @@ const BASE_SHELL_VERTS: Vec3[] = [
     { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 },
 ];
 
-// Per-weapon vertex displacement: each entry scales a vertex outward along its
-// own axis by (1 + grow * level). Negative = implode. Multiple weapons stack,
-// so a loadout produces a unique, asymmetric silhouette.
-const SHELL_MORPHS: Record<string, { idx: number; grow: number }[]> = {
+// Per-weapon vertex displacement. The grow variant scales a vert along its own
+// axis by (1 + grow * level). twist rotates the equatorial ring (y≈0 verts 0-3)
+// around Y. skew additively leans the top/bottom poles forward/back in Z.
+// Multiple weapons and types stack, so a loadout produces a unique silhouette.
+type ShellMorphEntry =
+    | { type?: 'grow'; idx: number; grow: number }
+    | { type: 'twist'; amount: number }
+    | { type: 'skew'; dz: number };
+
+const SHELL_MORPHS: Record<string, ShellMorphEntry[]> = {
     spirit_lance: [{ idx: 2, grow: 0.11 }],                                   // forward dart/lance
-    cyber_kora: [{ idx: 0, grow: 0.06 }, { idx: 1, grow: 0.06 }],             // pointed front/back (jagged via spikes)
+    cyber_kora: [{ idx: 0, grow: 0.06 }, { idx: 1, grow: 0.06 },
+                 { idx: 2, grow: -0.10 }, { idx: 3, grow: -0.10 }],           // caltrop: z-spikes + pinched sides
     void_aura: [{ idx: 0, grow: -0.03 }, { idx: 1, grow: -0.03 }, { idx: 2, grow: -0.03 }, { idx: 3, grow: -0.03 }, { idx: 4, grow: -0.03 }, { idx: 5, grow: -0.03 }], // implode/compact
-    nanite_swarm: [{ idx: 4, grow: 0.09 }, { idx: 5, grow: 0.09 }],           // tall segmented hull
+    nanite_swarm: [{ idx: 4, grow: 0.09 }, { idx: 5, grow: 0.09 }],           // tall segmented hull (+ belt in BodyStyle)
     solar_chakram: [{ idx: 0, grow: 0.06 }, { idx: 1, grow: 0.06 }, { idx: 2, grow: 0.05 }, { idx: 3, grow: 0.05 }, { idx: 4, grow: -0.05 }, { idx: 5, grow: -0.05 }], // flattened disc
-    void_wake: [{ idx: 3, grow: 0.12 }],                                      // rear tail/tendril
+    void_wake: [{ idx: 3, grow: 0.12 },
+                { idx: 4, grow: 0.05 }, { idx: 0, grow: -0.04 }, { idx: 1, grow: -0.04 }], // taper: rear tail + kite silhouette
     drum_echo: [{ idx: 4, grow: 0.03 }, { idx: 5, grow: 0.03 }],              // slight swell (+ breathing)
-    paradox_pendulum: [{ idx: 2, grow: 0.04 }, { idx: 3, grow: 0.04 }],       // stretched fore/aft
+    paradox_pendulum: [{ idx: 2, grow: 0.04 }, { idx: 3, grow: 0.04 },
+                       { type: 'twist', amount: 0.045 }],                     // twist: screwed/sheared crystal
     kaleidoscope_gaze: [{ idx: 0, grow: 0.04 }],                              // faceted front
     fractal_bloom: [{ idx: 0, grow: 0.04 }, { idx: 1, grow: 0.04 }, { idx: 2, grow: 0.04 }, { idx: 3, grow: 0.04 }, { idx: 4, grow: 0.04 }, { idx: 5, grow: 0.04 }], // bristling growth
-    ancestral_resonance: [{ idx: 4, grow: 0.13 }, { idx: 0, grow: 0.06 }],    // crown / horns
+    ancestral_resonance: [{ idx: 4, grow: 0.13 }, { idx: 0, grow: 0.06 },
+                          { type: 'skew', dz: 0.08 }],                        // skew: aggressive forward lean
 };
 
 const defaultCore = (): CoreStyle => ({
@@ -572,6 +583,7 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let plate = 0;
     let spike = 0;
     let breath = 0;
+    let belt = 0;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -585,11 +597,29 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
         if (!topWeapon || w.level > topWeapon.level) topWeapon = w;
         // accumulate vertex shape morph
         const morph = SHELL_MORPHS[w.id];
-        if (morph) for (const m of morph) {
-            const f = 1 + m.grow * w.level;
-            shellVerts[m.idx].x *= f; shellVerts[m.idx].y *= f; shellVerts[m.idx].z *= f;
+        if (morph) {
+            for (const m of morph) {
+                if (!m.type || m.type === 'grow') {
+                    const f = 1 + m.grow * w.level;
+                    shellVerts[m.idx].x *= f; shellVerts[m.idx].y *= f; shellVerts[m.idx].z *= f;
+                } else if (m.type === 'twist') {
+                    // rotate equatorial ring (verts 0-3, all at y≈0) around the Y axis
+                    const angle = m.amount * w.level;
+                    const cos = Math.cos(angle), sin = Math.sin(angle);
+                    for (const i of [0, 1, 2, 3]) {
+                        const { x, z } = shellVerts[i];
+                        shellVerts[i].x = x * cos - z * sin;
+                        shellVerts[i].z = x * sin + z * cos;
+                    }
+                } else if (m.type === 'skew') {
+                    // additive z lean: top pole forward, bottom pole backward
+                    shellVerts[4].z += m.dz * w.level;
+                    shellVerts[5].z -= m.dz * w.level;
+                }
+            }
         }
         if (w.id === 'drum_echo') breath = Math.max(breath, 0.05 + w.level * 0.005);
+        if (w.id === 'nanite_swarm') belt = Math.max(belt, 0.08 + w.level * 0.04);
     }
     if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
 
@@ -604,5 +634,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, core };
 };
