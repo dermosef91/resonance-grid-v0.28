@@ -1,8 +1,9 @@
 
 import { Player, MissionType } from '../../types';
-import { COLORS, DASH } from '../../constants';
+import { COLORS, DASH, GRAPHICS_QUALITY } from '../../constants';
 import { graphicsSettings } from '../graphicsSettings';
 import { project3D, parseColorToRgb } from '../renderUtils';
+import { PlayerAttachmentRegistry, SLOT_PHASE, computeBodyStyle, AttachmentCtx } from './playerAttachments';
 
 export const drawPlayerMesh = (
     ctx: CanvasRenderingContext2D,
@@ -183,254 +184,84 @@ export const drawPlayer = (
 
     const isWeaponsJammed = activeMissionType === MissionType.SHADOW_STEP;
 
-    const drawVoidOrb = (drawBack: boolean) => {
-        const w = player.weapons.find(w => w.id === 'void_aura');
-        if (!w) return;
-        const level = w.level;
-        const radius = (60 + (level * 10)) * player.stats.areaMult;
-        const time = frame * 0.02;
-        const rings = 3 + Math.floor(level / 5);
-        ctx.lineWidth = 2;
-
-        // Determine Aura Color based on Augment
-        let r = 153, g = 0, b = 255; // Default Purple #9900FF
-        if (w.augment === 'SUPERNOVA') { r = 255; g = 0; b = 255; } // Magenta
-        else if (w.augment === 'ENTROPY_FIELD') { r = 0; g = 0; b = 255; } // Blue
-
-        const backStroke = `rgba(${Math.max(0, r - 50)}, ${Math.max(0, g - 50)}, ${Math.max(0, b - 50)}, 0.4)`;
-        const frontStroke = `rgba(${Math.min(255, r + 30)}, ${Math.min(255, g + 50)}, ${Math.min(255, b)}, 0.8)`;
-        const shadowCol = `rgb(${r}, ${g}, ${b})`;
-
-        for (let ri = 0; ri < rings; ri++) {
-            const ringOffset = (ri / rings) * Math.PI;
-            const rotX = time * (ri % 2 === 0 ? 1 : -1) + ringOffset;
-            const rotY = time * (ri % 2 === 0 ? 0.5 : -0.5);
-            const rotZ = time * 0.2;
-            const segments = 32;
-            ctx.beginPath();
-            let first = true;
-            let hasPoints = false;
-            for (let i = 0; i <= segments; i++) {
-                const theta = (i / segments) * Math.PI * 2;
-                const lx = Math.cos(theta) * radius; const ly = Math.sin(theta) * radius; const lz = 0;
-                let x1 = lx * Math.cos(rotZ) - ly * Math.sin(rotZ); let y1 = lx * Math.sin(rotZ) + ly * Math.cos(rotZ); let z1 = lz;
-                let x2 = x1 * Math.cos(rotY) - z1 * Math.sin(rotY); let z2 = x1 * Math.sin(rotY) + z1 * Math.cos(rotY); let y2 = y1;
-                let y3 = y2 * Math.cos(rotX) - z2 * Math.sin(rotX); let z3 = y2 * Math.sin(rotX) + z2 * Math.cos(rotX); let x3 = x2;
-                const proj = projectPlayer3D(x3, y3, z3);
-                const isBack = proj.depth > 0;
-                if (isBack === drawBack) {
-                    if (first) { ctx.moveTo(proj.x, proj.y); first = false; } else { ctx.lineTo(proj.x, proj.y); }
-                    hasPoints = true;
-                } else { first = true; }
-            }
-            if (hasPoints) {
-                ctx.strokeStyle = drawBack ? backStroke : frontStroke;
-                ctx.shadowBlur = drawBack ? 0 : 10; ctx.shadowColor = shadowCol; ctx.stroke(); ctx.shadowBlur = 0;
-            }
-        }
+    // --- WEAPON-DRIVEN AVATAR BUILD-OUT ---
+    // Each equipped weapon renders an attachment that grows with its level (1->8)
+    // and changes with its augment. Run in two depth passes so parts pass behind
+    // and in front of the body. All share this exact transform via projectPlayer3D.
+    const bodyStyle = computeBodyStyle(player, GRAPHICS_QUALITY);
+    const attachCtx: AttachmentCtx = {
+        ctx, player, frame, t,
+        project: projectPlayer3D,
+        drawBack: true,
+        quality: GRAPHICS_QUALITY,
+        slotIndex: 0,
+        slotPhase: 0,
+        areaMult: player.stats.areaMult,
     };
-
-    // --- VOID WAKE: ABYSSAL LOOP VISUAL ---
-    const drawAbyssalLoop = (drawBack: boolean) => {
-        const w = player.weapons.find(w => w.id === 'void_wake' && w.level >= 8);
-        if (!w) return;
-
-        const time = frame * 0.04;
-        const baseRadius = 45 * player.stats.areaMult;
-
-        const layers = 3;
-
-        for (let l = 0; l < layers; l++) {
-            const layerOffset = (l * 0.2);
-            const animScale = 1.0 - ((frame * 0.01 + layerOffset) % 0.6);
-
-            const alpha = Math.min(1, animScale * 1.5);
-            if (alpha <= 0.1) continue;
-
-            const radius = baseRadius * animScale;
-
-            const rX = time * (l + 1) * 0.5;
-            const rY = time * (l * 0.7 + 0.3);
-            const rZ = time + (l * Math.PI / 3);
-
-            const segments = 32;
-
-            ctx.beginPath();
-            let first = true;
-            let hasPoints = false;
-
-            for (let j = 0; j <= segments; j++) {
-                const theta = (j / segments) * Math.PI * 2;
-
-                let x1 = Math.cos(theta) * radius;
-                let y1 = Math.sin(theta) * radius;
-                let z1 = 0;
-
-                let tx = x1 * Math.cos(rZ) - y1 * Math.sin(rZ);
-                let ty = x1 * Math.sin(rZ) + y1 * Math.cos(rZ);
-                x1 = tx; y1 = ty;
-
-                tx = x1 * Math.cos(rY) - z1 * Math.sin(rY);
-                let tz = x1 * Math.sin(rY) + z1 * Math.cos(rY);
-                x1 = tx; z1 = tz;
-
-                ty = y1 * Math.cos(rX) - z1 * Math.sin(rX);
-                tz = y1 * Math.sin(rX) + z1 * Math.cos(rX);
-                y1 = ty; z1 = tz;
-
-                const proj = projectPlayer3D(x1, y1, z1);
-
-                const jitter = (Math.random() - 0.5) * (5 * animScale);
-                const jx = proj.x + jitter;
-                const jy = proj.y + jitter;
-
-                const isBack = proj.depth > 0;
-
-                if (isBack === drawBack) {
-                    if (first) { ctx.moveTo(jx, jy); first = false; }
-                    else { ctx.lineTo(jx, jy); }
-                    hasPoints = true;
-                } else {
-                    first = true;
-                }
-            }
-
-            if (hasPoints) {
-                const coreColor = `rgba(255, 0, 255, ${alpha})`;
-                const glowColor = `rgba(208, 0, 255, ${alpha})`;
-
-                ctx.strokeStyle = coreColor;
-                ctx.shadowColor = glowColor;
-                ctx.shadowBlur = 10 * animScale;
-                ctx.lineWidth = 2 * animScale;
-                ctx.stroke();
-                ctx.shadowBlur = 0;
-            }
-        }
-    };
-
-    let spiritCrystals: { x: number, y: number, depth: number }[] = [];
-    const spiritLance = player.weapons.find(w => w.id === 'spirit_lance' && w.level >= 8);
-    if (spiritLance) {
-        const orbitSpeed = t * 2;
-        for (let i = 0; i < 3; i++) {
-            const offset = (Math.PI * 2 / 3) * i; const ox = Math.cos(orbitSpeed + offset) * 35; const oz = Math.sin(orbitSpeed + offset) * 35;
-            const proj = projectPlayer3D(ox, oz, -10 + Math.sin(t * 4 + i) * 5); spiritCrystals.push(proj);
-        }
-    }
-
-    if (!isWeaponsJammed) {
-        drawVoidOrb(true);
-        drawAbyssalLoop(true);
-
-        spiritCrystals.forEach(c => {
-            if (c.depth > 0) {
-                const size = 6; ctx.save(); ctx.translate(c.x, c.y); ctx.strokeStyle = '#00FFFF'; ctx.fillStyle = '#E0FFFF';
-                ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size / 2, 0); ctx.lineTo(0, size); ctx.lineTo(-size / 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-            }
+    const runAttachments = (drawBack: boolean) => {
+        if (isWeaponsJammed) return;
+        attachCtx.drawBack = drawBack;
+        player.weapons.forEach((w, i) => {
+            const renderer = PlayerAttachmentRegistry[w.id];
+            if (!renderer) return;
+            attachCtx.slotIndex = i;
+            attachCtx.slotPhase = SLOT_PHASE[i] ?? (i * 1.7);
+            renderer(attachCtx, w);
         });
-    }
+    };
 
-    // Draw Player Body 
-    const scale = 22; const vertices = [{ x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 }, { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 }, { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 }];
+    // BACK PASS (behind the body)
+    runAttachments(true);
+
+    // --- PLAYER BODY (Octahedron shell) ---
+    const scale = 22;
+    const vertices = [{ x: 0, y: 0, z: 1.3 }, { x: 0, y: 0, z: -1.3 }, { x: 1.0, y: 0, z: 0 }, { x: -1.0, y: 0, z: 0 }, { x: 0, y: 1.0, z: 0 }, { x: 0, y: -1.0, z: 0 }];
     const projVerts = vertices.map(v => projectPlayer3D(v.x * scale, v.y * scale, v.z * scale));
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
-    ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+    ctx.lineWidth = bodyStyle.shellLineWidth; ctx.lineJoin = 'round';
     faces.forEach(f => {
         const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
-        ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.strokeStyle = COLORS.white; ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(v0.x, v0.y); ctx.lineTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y); ctx.closePath();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.strokeStyle = bodyStyle.shellColor;
+        ctx.lineWidth = bodyStyle.shellLineWidth;
+        ctx.fill(); ctx.stroke();
+        // Armor plating: inset highlight on near faces (artifacts / armor stat).
+        if (bodyStyle.plate > 0 && (v0.depth + v1.depth + v2.depth) < 0) {
+            const mx = (v0.x + v1.x + v2.x) / 3, my = (v0.y + v1.y + v2.y) / 3;
+            ctx.beginPath();
+            ctx.moveTo(mx + (v0.x - mx) * 0.6, my + (v0.y - my) * 0.6);
+            ctx.lineTo(mx + (v1.x - mx) * 0.6, my + (v1.y - my) * 0.6);
+            ctx.lineTo(mx + (v2.x - mx) * 0.6, my + (v2.y - my) * 0.6);
+            ctx.closePath();
+            ctx.strokeStyle = `rgba(255,255,255,${0.25 * bodyStyle.plate})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     });
 
-    if (!isWeaponsJammed) {
-        spiritCrystals.forEach(c => {
-            if (c.depth <= 0) {
-                const size = 6; ctx.save(); ctx.translate(c.x, c.y); ctx.strokeStyle = '#00FFFF'; ctx.fillStyle = '#E0FFFF';
-                ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size / 2, 0); ctx.lineTo(0, size); ctx.lineTo(-size / 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-            }
-        });
-
-        // Weapon Effects
-        player.weapons.forEach(w => {
-            if (w.level >= 8) {
-                if (w.id === 'nanite_swarm') {
-                    const swarmCount = 6;
-                    const swarmRadius = 45;
-                    const swarmTime = frame * 0.05;
-
-                    ctx.strokeStyle = '#00FF00';
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
-                    ctx.lineWidth = 1;
-                    ctx.lineJoin = 'round';
-
-                    for (let i = 0; i < swarmCount; i++) {
-                        const angle = (i / swarmCount) * Math.PI * 2 + swarmTime;
-                        const yBob = Math.sin(swarmTime * 2 + i) * 10;
-                        const cx = Math.cos(angle) * swarmRadius;
-                        const cy = yBob;
-                        const cz = Math.sin(angle) * swarmRadius;
-                        const scale = 4;
-                        const nrX = swarmTime * 2 + i;
-                        const nrY = swarmTime * 3;
-
-                        const rawVerts = [
-                            { x: 0, y: -scale * 1.5, z: 0 },
-                            { x: scale, y: scale * 0.5, z: scale * 0.8 },
-                            { x: -scale, y: scale * 0.5, z: scale * 0.8 },
-                            { x: 0, y: scale * 0.5, z: -scale }
-                        ];
-
-                        const worldVerts = rawVerts.map(v => {
-                            let y1 = v.y * Math.cos(nrX) - v.z * Math.sin(nrX);
-                            let z1 = v.y * Math.sin(nrX) + v.z * Math.cos(nrX);
-                            let x2 = v.x * Math.cos(nrY) - z1 * Math.sin(nrY);
-                            let z2 = v.x * Math.sin(nrY) + z1 * Math.cos(nrY);
-                            return { x: x2 + cx, y: y1 + cy, z: z2 + cz };
-                        });
-
-                        const pVerts = worldVerts.map(v => projectPlayer3D(v.x, v.y, v.z));
-
-                        ctx.beginPath();
-                        ctx.moveTo(pVerts[1].x, pVerts[1].y); ctx.lineTo(pVerts[2].x, pVerts[2].y); ctx.lineTo(pVerts[3].x, pVerts[3].y); ctx.lineTo(pVerts[1].x, pVerts[1].y);
-                        ctx.moveTo(pVerts[0].x, pVerts[0].y); ctx.lineTo(pVerts[1].x, pVerts[1].y);
-                        ctx.moveTo(pVerts[0].x, pVerts[0].y); ctx.lineTo(pVerts[2].x, pVerts[2].y);
-                        ctx.moveTo(pVerts[0].x, pVerts[0].y); ctx.lineTo(pVerts[3].x, pVerts[3].y);
-
-                        ctx.stroke(); ctx.fill();
-                    }
-                } else if (w.id === 'cyber_kora') {
-                    ctx.save(); ctx.shadowBlur = 10; ctx.shadowColor = '#00FFFF';
-                    for (let i = 0; i < 3; i++) {
-                        const vA = projVerts[Math.floor(Math.random() * projVerts.length)];
-                        const vB = projVerts[Math.floor(Math.random() * projVerts.length)];
-                        ctx.strokeStyle = i === 0 ? '#FFFFFF' : '#00FFFF';
-                        ctx.lineWidth = i === 0 ? 2 : 1;
-                        ctx.beginPath(); ctx.moveTo(vA.x, vA.y);
-                        const midX = (vA.x + vB.x) / 2 + (Math.random() - 0.5) * 15;
-                        const midY = (vA.y + vB.y) / 2 + (Math.random() - 0.5) * 15;
-                        ctx.lineTo(midX, midY); ctx.lineTo(vB.x, vB.y); ctx.stroke();
-                    }
-                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.beginPath();
-                    const radius = 45; const segments = 12;
-                    for (let i = 0; i <= segments; i++) {
-                        const ang = (i / segments) * Math.PI * 2 + t * 5;
-                        const rVar = radius + Math.random() * 10;
-                        const pt = projectPlayer3D(Math.cos(ang) * rVar, Math.sin(ang) * rVar, 0);
-                        if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
-                    }
-                    ctx.stroke(); ctx.restore();
-                }
-            }
+    // Structural spikes growing from vertices with total weapon investment (HIGH only).
+    if (bodyStyle.spike > 0) {
+        ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1.5;
+        vertices.forEach(v => {
+            const base = projectPlayer3D(v.x * scale, v.y * scale, v.z * scale);
+            const ext = scale + bodyStyle.spike;
+            const tip = projectPlayer3D(v.x * ext, v.y * ext, v.z * ext);
+            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
         });
     }
 
-    // Core Drawing
+    // FRONT PASS (in front of body, before the core)
+    runAttachments(false);
+
+    // --- CORE (Icosahedron) ---
     {
         let coreColor = COLORS.orange; let s = 3.5;
         if (activeMissionType === MissionType.SHADOW_STEP) {
             coreColor = (Math.floor(frame / 10) % 2 === 0) ? '#FF0000' : '#444444';
-        } else if (!isWeaponsJammed && player.weapons.some(w => w.id === 'cyber_kora')) {
-            s = 3.5 + Math.sin(t * 10) * 1;
-            coreColor = '#00FFFF';
+        } else if (bodyStyle.coreTint) {
+            if (player.weapons.some(w => w.id === 'cyber_kora')) s = 3.5 + Math.sin(t * 10) * 1;
+            coreColor = bodyStyle.coreTint;
         }
 
         const rawVerts = [{ x: 0, y: 1, z: 1.618 }, { x: 0, y: 1, z: -1.618 }, { x: 0, y: -1, z: 1.618 }, { x: 0, y: -1, z: -1.618 }, { x: 1, y: 1.618, z: 0 }, { x: 1, y: -1.618, z: 0 }, { x: -1, y: 1.618, z: 0 }, { x: -1, y: -1.618, z: 0 }, { x: 1.618, y: 0, z: 1 }, { x: 1.618, y: 0, z: -1 }, { x: -1.618, y: 0, z: 1 }, { x: -1.618, y: 0, z: -1 }];
@@ -441,12 +272,6 @@ export const drawPlayer = (
         faceList.sort((a, b) => b.depth - a.depth);
         ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)'; ctx.lineWidth = 1; ctx.fillStyle = coreColor;
         faceList.forEach(f => { ctx.beginPath(); ctx.moveTo(f.v0.x, f.v0.y); ctx.lineTo(f.v1.x, f.v1.y); ctx.lineTo(f.v2.x, f.v2.y); ctx.closePath(); ctx.fill(); ctx.stroke(); });
-    }
-
-    // Front Layers - Skip if weapons jammed
-    if (!isWeaponsJammed) {
-        drawVoidOrb(false);
-        drawAbyssalLoop(false);
     }
 
     // Extra Lives Satellites
