@@ -1,0 +1,560 @@
+// services/renderers/playerAttachments.ts
+//
+// Data-driven registry of per-weapon AVATAR attachments. As the player picks
+// weapons, levels them (1->8) and chooses augments (level-5 modifications), the
+// avatar accretes orbiting parts AND structural body growth, so each run ends
+// with a visually distinct silhouette.
+//
+// Pattern mirrors services/renderers/index.ts (EnemyRenderRegistry): add a draw
+// function, register it by weapon id. Missing ids simply contribute nothing.
+//
+// Each renderer is invoked TWICE per frame by drawPlayer: once for the BACK
+// depth pass (behind the body, drawBack=true) and once for the FRONT pass
+// (drawBack=false). They share the body's exact transform via `project`.
+
+import { Player, Weapon } from '../../types';
+import { COLORS } from '../../constants';
+import { WEAPON_AUGMENTS } from '../data/weapons';
+import { lerpColor } from '../renderUtils';
+
+export interface AttachmentCtx {
+    ctx: CanvasRenderingContext2D;
+    player: Player;
+    frame: number;
+    t: number;                 // frame * 0.05 (precomputed in drawPlayer)
+    project: (x: number, y: number, z: number) => { x: number; y: number; depth: number; scale: number };
+    drawBack: boolean;         // true = behind-body pass, false = front pass
+    quality: 'HIGH' | 'LOW';
+    slotIndex: number;         // weapon index in player.weapons (0..2)
+    slotPhase: number;         // SLOT_PHASE[slotIndex] orbit offset (radians)
+    areaMult: number;          // player.stats.areaMult, hoisted
+}
+
+export type AttachmentRenderer = (a: AttachmentCtx, w: Weapon) => void;
+
+// Up to 3 simultaneous weapons spread 120 degrees apart so orbiting parts
+// don't visually collide. Radial shells separate by radius band (slotIndex*N).
+export const SLOT_PHASE = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+// Local rotation about the origin (Z then Y then X), matching the legacy
+// void-orb math. Returns the rotated point in local space (pre-projection).
+const rot3 = (x: number, y: number, z: number, rx: number, ry: number, rz: number) => {
+    // Z
+    let nx = x * Math.cos(rz) - y * Math.sin(rz);
+    let ny = x * Math.sin(rz) + y * Math.cos(rz);
+    let nz = z;
+    // Y
+    let mx = nx * Math.cos(ry) - nz * Math.sin(ry);
+    let mz = nx * Math.sin(ry) + nz * Math.cos(ry);
+    // X
+    let py = ny * Math.cos(rx) - mz * Math.sin(rx);
+    let pz = ny * Math.sin(rx) + mz * Math.cos(rx);
+    return { x: mx, y: py, z: pz };
+};
+
+// Continuous level growth (NOT gated at 8): count grows step-wise, size ramps.
+const lvlCount = (level: number, base: number, every: number, cap: number) =>
+    Math.min(cap, base + Math.floor(level / every));
+const lvlSize = (level: number) => 0.6 + level * 0.05; // L1 ~0.65 -> L8 1.0
+
+// Resolve a weapon's chosen-augment color (data-driven), else fallback.
+const augColor = (w: Weapon, fallback: string): string => {
+    if (!w.augment) return fallback;
+    const pair = WEAPON_AUGMENTS[w.id];
+    const def = pair?.find(a => a.id === w.augment);
+    return def?.color ?? fallback;
+};
+
+// Radial band so multiple shell-type weapons nest instead of overlapping.
+const slotRadius = (a: AttachmentCtx, base: number) => base + a.slotIndex * 14;
+
+// Draw a flat diamond/crystal at a projected point.
+const drawDiamond = (
+    ctx: CanvasRenderingContext2D, x: number, y: number, size: number,
+    stroke: string, fill: string, elongate = 1
+) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = stroke;
+    ctx.fillStyle = fill;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -size * elongate);
+    ctx.lineTo(size / 2, 0);
+    ctx.lineTo(0, size * elongate);
+    ctx.lineTo(-size / 2, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+};
+
+// Draw a small spinning wireframe tetrahedron centered at local (cx,cy,cz).
+const drawTetra = (
+    a: AttachmentCtx, cx: number, cy: number, cz: number, scale: number,
+    rx: number, ry: number, stroke: string, fill: string
+) => {
+    const { ctx, project } = a;
+    const raw = [
+        { x: 0, y: -scale * 1.5, z: 0 },
+        { x: scale, y: scale * 0.5, z: scale * 0.8 },
+        { x: -scale, y: scale * 0.5, z: scale * 0.8 },
+        { x: 0, y: scale * 0.5, z: -scale }
+    ];
+    const p = raw.map(v => {
+        const r = rot3(v.x, v.y, v.z, rx, ry, 0);
+        return project(r.x + cx, r.y + cy, r.z + cz);
+    });
+    ctx.strokeStyle = stroke;
+    ctx.fillStyle = fill;
+    ctx.lineWidth = 1;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p[1].x, p[1].y); ctx.lineTo(p[2].x, p[2].y); ctx.lineTo(p[3].x, p[3].y); ctx.lineTo(p[1].x, p[1].y);
+    ctx.moveTo(p[0].x, p[0].y); ctx.lineTo(p[1].x, p[1].y);
+    ctx.moveTo(p[0].x, p[0].y); ctx.lineTo(p[2].x, p[2].y);
+    ctx.moveTo(p[0].x, p[0].y); ctx.lineTo(p[3].x, p[3].y);
+    ctx.stroke(); ctx.fill();
+};
+
+// Draw a flat regular polygon (ring of `sides`) facing the camera at projected
+// center, radius in px (already roughly scaled by depth via `scale`).
+const drawPolyFlat = (
+    a: AttachmentCtx, cx: number, cy: number, cz: number, radius: number,
+    sides: number, spin: number, stroke: string, fill: string
+) => {
+    const { ctx, project } = a;
+    ctx.strokeStyle = stroke;
+    ctx.fillStyle = fill;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i <= sides; i++) {
+        const ang = (i / sides) * Math.PI * 2 + spin;
+        const p = project(cx + Math.cos(ang) * radius, cy, cz + Math.sin(ang) * radius);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+};
+
+// Stroke a rotated 3D ring, splitting segments into the requested depth pass.
+const drawRing = (
+    a: AttachmentCtx, radius: number, rx: number, ry: number, rz: number,
+    stroke: string, glow: string, width: number
+) => {
+    const { ctx, project, drawBack, quality } = a;
+    const segs = quality === 'LOW' ? 14 : 30;
+    ctx.beginPath();
+    let first = true; let has = false;
+    for (let i = 0; i <= segs; i++) {
+        const theta = (i / segs) * Math.PI * 2;
+        const r = rot3(Math.cos(theta) * radius, Math.sin(theta) * radius, 0, rx, ry, rz);
+        const proj = project(r.x, r.y, r.z);
+        const isBack = proj.depth > 0;
+        if (isBack === drawBack) {
+            if (first) { ctx.moveTo(proj.x, proj.y); first = false; } else { ctx.lineTo(proj.x, proj.y); }
+            has = true;
+        } else { first = true; }
+    }
+    if (has) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        if (quality === 'HIGH' && !drawBack) { ctx.shadowBlur = 10; ctx.shadowColor = glow; }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Per-weapon attachment renderers (level 1->8 growth + augment variants)
+// ---------------------------------------------------------------------------
+
+// SPIRIT LANCE -> orbiting energy crystals. VOLTAIC_ARC: cyan + arcs.
+// PHASE_DRILL: violet elongated shards.
+const drawSpiritLance: AttachmentRenderer = (a, w) => {
+    const { ctx, t, project, drawBack, slotPhase } = a;
+    const phase = w.augment === 'PHASE_DRILL';
+    const stroke = phase ? '#aa00ff' : (w.augment === 'VOLTAIC_ARC' ? '#00ccff' : '#00FFFF');
+    const fill = phase ? '#d9a8ff' : '#E0FFFF';
+    const count = lvlCount(w.level, 1, 2, 5);
+    const orbitR = slotRadius(a, 30);
+    const size = 6 * lvlSize(w.level);
+    const elong = phase ? 1.8 : 1;
+    const pts: { x: number; y: number; depth: number }[] = [];
+    for (let i = 0; i < count; i++) {
+        const ang = t * 2 + slotPhase + (Math.PI * 2 / count) * i;
+        const proj = project(Math.cos(ang) * orbitR, -10 + Math.sin(t * 4 + i) * 5, Math.sin(ang) * orbitR);
+        pts.push(proj);
+        if ((proj.depth > 0) === drawBack) drawDiamond(ctx, proj.x, proj.y, size, stroke, fill, elong);
+    }
+    // Voltaic arcs between consecutive crystals (front pass only).
+    if (w.augment === 'VOLTAIC_ARC' && !drawBack && pts.length > 1) {
+        ctx.strokeStyle = '#aef6ff'; ctx.lineWidth = 1;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i]; const q = pts[(i + 1) % pts.length];
+            if (p.depth > 0 || q.depth > 0) continue;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y);
+            ctx.lineTo((p.x + q.x) / 2 + (Math.random() - 0.5) * 12, (p.y + q.y) / 2 + (Math.random() - 0.5) * 12);
+            ctx.lineTo(q.x, q.y); ctx.stroke();
+        }
+    }
+};
+
+// CYBER KORA -> rotating sonic ring + lightning arcs across body.
+// DISSONANCE_SHREDDER: red glitch jitter. ACOUSTIC_BARRIER: solid cyan band.
+const drawCyberKora: AttachmentRenderer = (a, w) => {
+    const { ctx, t, project, drawBack, quality, areaMult } = a;
+    const diss = w.augment === 'DISSONANCE_SHREDDER';
+    const color = diss ? '#FF0033' : '#00FFFF';
+    const radius = slotRadius(a, 42) * (0.7 + w.level * 0.04) * areaMult;
+    // Ring (single pass on front to stay cheap, split by depth).
+    const segs = quality === 'LOW' ? 12 : 16 + w.level;
+    ctx.beginPath();
+    let first = true; let has = false;
+    for (let i = 0; i <= segs; i++) {
+        const ang = (i / segs) * Math.PI * 2 + t * 5;
+        const jitter = diss ? (Math.random() - 0.5) * 14 : 0;
+        const proj = project(Math.cos(ang) * radius, 0, Math.sin(ang) * radius);
+        if ((proj.depth > 0) === drawBack) {
+            const x = proj.x + jitter, y = proj.y + jitter;
+            if (first) { ctx.moveTo(x, y); first = false; } else { ctx.lineTo(x, y); }
+            has = true;
+        } else first = true;
+    }
+    if (has) {
+        ctx.strokeStyle = w.augment === 'ACOUSTIC_BARRIER' ? 'rgba(0,255,255,0.85)' : `rgba(${diss ? '255,0,51' : '0,255,255'},0.5)`;
+        ctx.lineWidth = w.augment === 'ACOUSTIC_BARRIER' ? 3 : 2;
+        if (quality === 'HIGH' && !drawBack) { ctx.shadowBlur = 8; ctx.shadowColor = color; }
+        ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    // Lightning arcs only on the front pass.
+    if (!drawBack) {
+        const arcs = 1 + Math.floor(w.level / 3);
+        if (quality === 'HIGH') { ctx.shadowBlur = 8; ctx.shadowColor = color; }
+        for (let i = 0; i < arcs; i++) {
+            const a1 = Math.random() * Math.PI * 2, a2 = Math.random() * Math.PI * 2;
+            const r = radius * 0.55;
+            const pA = project(Math.cos(a1) * r, (Math.random() - 0.5) * 20, Math.sin(a1) * r);
+            const pB = project(Math.cos(a2) * r, (Math.random() - 0.5) * 20, Math.sin(a2) * r);
+            ctx.strokeStyle = i === 0 ? '#FFFFFF' : color; ctx.lineWidth = i === 0 ? 2 : 1;
+            ctx.beginPath(); ctx.moveTo(pA.x, pA.y);
+            ctx.lineTo((pA.x + pB.x) / 2 + (Math.random() - 0.5) * 15, (pA.y + pB.y) / 2 + (Math.random() - 0.5) * 15);
+            ctx.lineTo(pB.x, pB.y); ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+    }
+};
+
+// VOID AURA -> rotating 3D rings. SUPERNOVA: magenta + extra pulsing ring.
+// ENTROPY_FIELD: blue.
+const drawVoidAura: AttachmentRenderer = (a, w) => {
+    const { frame, areaMult } = a;
+    const sup = w.augment === 'SUPERNOVA';
+    let baseR = (34 + w.level * 7) * areaMult;
+    if (sup) baseR *= 1.4 + Math.sin(frame * 0.08) * 0.1;
+    const rings = lvlCount(w.level, 1, 3, 3) + (sup ? 1 : 0);
+    const time = frame * 0.02;
+    const col = sup ? 'rgba(255,0,255,' : (w.augment === 'ENTROPY_FIELD' ? 'rgba(60,80,255,' : 'rgba(153,0,255,');
+    const glow = sup ? '#FF00FF' : (w.augment === 'ENTROPY_FIELD' ? '#3050FF' : '#9900FF');
+    for (let ri = 0; ri < rings; ri++) {
+        const off = (ri / rings) * Math.PI;
+        const rx = time * (ri % 2 === 0 ? 1 : -1) + off;
+        const ry = time * (ri % 2 === 0 ? 0.5 : -0.5);
+        const rz = time * 0.2;
+        drawRing(a, baseR, rx, ry, rz, col + (a.drawBack ? '0.4)' : '0.8)'), glow, 2);
+    }
+};
+
+// NANITE SWARM -> orbiting wireframe drones (tetrahedra). HUNTER_PROTOCOL: red.
+// HIVE_SHIELD: tighter defensive ring of green drones.
+const drawNaniteSwarm: AttachmentRenderer = (a, w) => {
+    const { frame, project, drawBack, slotPhase } = a;
+    const hive = w.augment === 'HIVE_SHIELD';
+    const hunter = w.augment === 'HUNTER_PROTOCOL';
+    const stroke = hunter ? '#FF3030' : '#00FF00';
+    const fill = hunter ? 'rgba(255,48,48,0.3)' : 'rgba(0,255,0,0.3)';
+    const count = lvlCount(w.level, 1, 2, hive ? 8 : 6);
+    const radius = (hive ? 34 : 45) + a.slotIndex * 8;
+    const swarmTime = frame * 0.05;
+    for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2 + swarmTime + slotPhase;
+        const cx = Math.cos(ang) * radius;
+        const cy = hive ? 0 : Math.sin(swarmTime * 2 + i) * 10;
+        const cz = Math.sin(ang) * radius;
+        const proj = project(cx, cy, cz);
+        if ((proj.depth > 0) === drawBack) {
+            drawTetra(a, cx, cy, cz, 4 * lvlSize(w.level), swarmTime * 2 + i, swarmTime * 3, stroke, fill);
+        }
+    }
+};
+
+// SOLAR CHAKRAM -> orbiting gold spinning discs. ORBITAL_LOCK: outer locked ring.
+// FRACTAL_SPLIT: each disc trails a smaller orange disc.
+const drawSolarChakram: AttachmentRenderer = (a, w) => {
+    const { project, t, drawBack, slotPhase } = a;
+    const lock = w.augment === 'ORBITAL_LOCK';
+    const split = w.augment === 'FRACTAL_SPLIT';
+    const stroke = split ? '#FFAA00' : '#FFD700';
+    const count = lvlCount(w.level, 1, 3, 4);
+    const radius = (lock ? slotRadius(a, 58) : slotRadius(a, 34)) * (0.8 + w.level * 0.03);
+    const spin = t * (lock ? 1.2 : 2.2);
+    const size = 8 * lvlSize(w.level);
+    for (let i = 0; i < count; i++) {
+        const ang = spin + slotPhase + (Math.PI * 2 / count) * i;
+        const cx = Math.cos(ang) * radius, cz = Math.sin(ang) * radius;
+        const proj = project(cx, 0, cz);
+        if ((proj.depth > 0) === drawBack) {
+            drawPolyFlat(a, cx, 0, cz, size, 8, t * 6 + i, stroke, 'rgba(255,170,0,0.25)');
+            if (split) {
+                const sx = Math.cos(ang + 0.4) * (radius * 0.6), sz = Math.sin(ang + 0.4) * (radius * 0.6);
+                drawPolyFlat(a, sx, 0, sz, size * 0.5, 6, -t * 8, '#FFCC44', 'rgba(255,204,68,0.2)');
+            }
+        }
+    }
+};
+
+// VOID WAKE -> abyssal loop rings (pulsing inward). GRAVITATIONAL_WELL: pink.
+// VOID_SIPHON: white.
+const drawVoidWake: AttachmentRenderer = (a, w) => {
+    const { ctx, frame, project, drawBack, quality, areaMult } = a;
+    const time = frame * 0.04;
+    const baseRadius = (24 + w.level * 3) * areaMult;
+    const layers = lvlCount(w.level, 1, 3, 3);
+    const rgb = w.augment === 'GRAVITATIONAL_WELL' ? '255,0,85' : (w.augment === 'VOID_SIPHON' ? '240,240,255' : '255,0,255');
+    const segs = quality === 'LOW' ? 16 : 30;
+    for (let l = 0; l < layers; l++) {
+        const animScale = 1.0 - ((frame * 0.01 + l * 0.2) % 0.6);
+        const alpha = Math.min(1, animScale * 1.5);
+        if (alpha <= 0.1) continue;
+        const radius = baseRadius * animScale;
+        const rx = time * (l + 1) * 0.5, ry = time * (l * 0.7 + 0.3), rz = time + (l * Math.PI / 3);
+        ctx.beginPath();
+        let first = true; let has = false;
+        for (let j = 0; j <= segs; j++) {
+            const theta = (j / segs) * Math.PI * 2;
+            const r = rot3(Math.cos(theta) * radius, Math.sin(theta) * radius, 0, rx, ry, rz);
+            const proj = project(r.x, r.y, r.z);
+            if ((proj.depth > 0) === drawBack) {
+                const jit = (Math.random() - 0.5) * (5 * animScale);
+                if (first) { ctx.moveTo(proj.x + jit, proj.y + jit); first = false; }
+                else ctx.lineTo(proj.x + jit, proj.y + jit);
+                has = true;
+            } else first = true;
+        }
+        if (has) {
+            ctx.strokeStyle = `rgba(${rgb},${alpha})`;
+            ctx.lineWidth = 2 * animScale;
+            if (quality === 'HIGH' && !drawBack) { ctx.shadowColor = `rgba(${rgb},${alpha})`; ctx.shadowBlur = 10 * animScale; }
+            ctx.stroke(); ctx.shadowBlur = 0;
+        }
+    }
+};
+
+// DRUM ECHO -> orbiting hexagonal drum satellites. BASS_DROP: orange pulse.
+// SOLAR_FLARE: yellow with emitted spikes.
+const drawDrumEcho: AttachmentRenderer = (a, w) => {
+    const { ctx, project, t, drawBack, slotPhase, areaMult } = a;
+    const bass = w.augment === 'BASS_DROP';
+    const flare = w.augment === 'SOLAR_FLARE';
+    const stroke = bass ? '#FF4400' : (flare ? '#FFFF00' : '#0088FF');
+    const fill = bass ? 'rgba(255,68,0,0.25)' : (flare ? 'rgba(255,255,0,0.2)' : 'rgba(0,136,255,0.2)');
+    const count = lvlCount(w.level, 2, 3, 6);
+    let radius = slotRadius(a, 50) * (0.8 + w.level * 0.03) * areaMult;
+    if (bass) radius *= 0.8 + Math.abs(Math.sin(t * 1.5)) * 0.3; // slam pulse
+    const size = 7 * lvlSize(w.level);
+    for (let i = 0; i < count; i++) {
+        const ang = t * 1.4 + slotPhase + (Math.PI * 2 / count) * i;
+        const cx = Math.cos(ang) * radius, cz = Math.sin(ang) * radius;
+        const proj = project(cx, 0, cz);
+        if ((proj.depth > 0) === drawBack) {
+            drawPolyFlat(a, cx, 0, cz, size, 6, t * 2, stroke, fill);
+            if (flare) {
+                const fp = project(cx * 1.4, 0, cz * 1.4);
+                ctx.strokeStyle = '#FFEE66'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(proj.x, proj.y); ctx.lineTo(fp.x, fp.y); ctx.stroke();
+            }
+        }
+    }
+};
+
+// PARADOX PENDULUM -> swinging arm + bob. QUANTUM_ECHO: opposed cyan phantom.
+// TEMPORAL_DRAG: violet drag trail.
+const drawParadoxPendulum: AttachmentRenderer = (a, w) => {
+    const { ctx, project, t, drawBack, areaMult } = a;
+    const drag = w.augment === 'TEMPORAL_DRAG';
+    const echo = w.augment === 'QUANTUM_ECHO';
+    const armLen = (40 + w.level * 4) * areaMult;
+    const sweep = Math.sin(t * 1.8) * (0.6 + w.level * 0.04);
+    const drawArm = (angle: number, color: string, phantom: boolean) => {
+        const bx = Math.sin(angle) * armLen, bz = Math.cos(angle) * armLen * 0.4;
+        const pivot = project(0, -8, 0);
+        const bob = project(bx, 24, bz);
+        if ((bob.depth > 0) !== drawBack) return;
+        ctx.strokeStyle = color; ctx.lineWidth = phantom ? 1.5 : 2.5; ctx.globalAlpha = phantom ? 0.5 : 1;
+        ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(bob.x, bob.y); ctx.stroke();
+        if (drag) {
+            ctx.strokeStyle = 'rgba(170,0,170,0.3)';
+            for (let s = 1; s <= 3; s++) {
+                const ta = angle - sweep * 0.15 * s;
+                const tb = project(Math.sin(ta) * armLen, 24, Math.cos(ta) * armLen * 0.4);
+                ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(tb.x, tb.y); ctx.stroke();
+            }
+        }
+        drawDiamond(ctx, bob.x, bob.y, 7 * lvlSize(w.level), color, phantom ? 'rgba(0,255,255,0.3)' : '#FFE9A8');
+        ctx.globalAlpha = 1;
+    };
+    drawArm(sweep, drag ? '#AA00AA' : '#FFD700', false);
+    if (echo) drawArm(sweep + Math.PI, '#00FFFF', true);
+};
+
+// KALEIDOSCOPE GAZE -> prismatic lens halo above the avatar with RGB rays.
+// TRI_OPTIC_PRISM: 3 lenses. CHROMA_STASIS: cyan crystalline lens.
+const drawKaleidoscope: AttachmentRenderer = (a, w) => {
+    const { ctx, project, t, drawBack, slotPhase } = a;
+    const tri = w.augment === 'TRI_OPTIC_PRISM';
+    const stasis = w.augment === 'CHROMA_STASIS';
+    const lenses = tri ? 3 : 1;
+    const radius = 22;
+    const rayLen = 18 + w.level * 3;
+    const rgb = stasis ? ['#00FFFF', '#00FFFF', '#00FFFF'] : ['#FF0044', '#00FF44', '#4488FF'];
+    for (let l = 0; l < lenses; l++) {
+        const la = slotPhase + (tri ? (l - 1) * 0.8 : 0);
+        const cx = Math.sin(la) * 18, cz = Math.cos(la) * 8;
+        const proj = project(cx, -30, cz);
+        if ((proj.depth > 0) !== drawBack) continue;
+        // Lens body
+        drawPolyFlat(a, cx, -30, cz, radius * lvlSize(w.level), 6, t * 1.5, stasis ? '#00FFFF' : '#FFFFFF', 'rgba(255,255,255,0.12)');
+        // RGB split rays
+        for (let r = 0; r < 3; r++) {
+            const ra = t * 2 + (r / 3) * Math.PI * 2;
+            const tip = project(cx + Math.cos(ra) * rayLen, -30, cz + Math.sin(ra) * rayLen);
+            ctx.strokeStyle = rgb[r]; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(proj.x, proj.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        }
+    }
+};
+
+// FRACTAL BLOOM -> orbiting recursive branch motes. JULIAS_GRASP: cyan.
+// RECURSIVE_SPLIT: magenta, larger.
+const drawFractalBloom: AttachmentRenderer = (a, w) => {
+    const { ctx, project, t, drawBack, slotPhase } = a;
+    const split = w.augment === 'RECURSIVE_SPLIT';
+    const color = split ? '#FF00FF' : '#00FFFF';
+    const count = lvlCount(w.level, 1, 2, 4);
+    const orbitR = slotRadius(a, 36);
+    const depth = Math.min(4, 2 + Math.floor(w.level / 3));
+    for (let i = 0; i < count; i++) {
+        const ang = t * 1.6 + slotPhase + (Math.PI * 2 / count) * i;
+        const proj = project(Math.cos(ang) * orbitR, Math.sin(t * 3 + i) * 6, Math.sin(ang) * orbitR);
+        if ((proj.depth > 0) !== drawBack) continue;
+        // Cheap 2D recursive Y-branch at the projected position.
+        ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+        const branch = (x: number, y: number, len: number, ang2: number, d: number) => {
+            if (d <= 0 || len < 1) return;
+            const ex = x + Math.cos(ang2) * len, ey = y + Math.sin(ang2) * len;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+            branch(ex, ey, len * 0.66, ang2 - 0.6, d - 1);
+            branch(ex, ey, len * 0.66, ang2 + 0.6, d - 1);
+        };
+        const base = (split ? 9 : 7) * lvlSize(w.level);
+        branch(proj.x, proj.y, base, -Math.PI / 2 + t, depth);
+    }
+};
+
+// ANCESTRAL RESONANCE -> periodic expanding ground shockwave + totem base ring.
+// CHRONO_STUTTER: cyan. AFTERSHOCK: green double pulse.
+const drawAncestralResonance: AttachmentRenderer = (a, w) => {
+    const { ctx, project, frame, drawBack, areaMult } = a;
+    const chrono = w.augment === 'CHRONO_STUTTER';
+    const after = w.augment === 'AFTERSHOCK';
+    // Persistent low totem ring (front+back via depth).
+    const baseR = slotRadius(a, 30) * areaMult;
+    drawPolyFlat(a, 0, 18, 0, baseR, 6, frame * 0.01, `rgba(${chrono ? '0,255,255' : '0,255,0'},0.5)`, 'rgba(0,0,0,0)');
+    // Expanding pulses on the ground plane.
+    const pulses = after ? 2 : 1;
+    const maxR = (60 + w.level * 8) * areaMult;
+    for (let p = 0; p < pulses; p++) {
+        const prog = ((frame * 0.012 + p * 0.4) % 1);
+        const r = baseR + prog * maxR;
+        const alpha = (1 - prog) * 0.7;
+        ctx.beginPath();
+        let first = true; let has = false;
+        const segs = a.quality === 'LOW' ? 16 : 28;
+        for (let i = 0; i <= segs; i++) {
+            const ang = (i / segs) * Math.PI * 2;
+            const proj = project(Math.cos(ang) * r, 20, Math.sin(ang) * r);
+            if ((proj.depth > 0) === drawBack) {
+                if (first) { ctx.moveTo(proj.x, proj.y); first = false; } else ctx.lineTo(proj.x, proj.y);
+                has = true;
+            } else first = true;
+        }
+        if (has) {
+            ctx.strokeStyle = `rgba(${chrono ? '0,255,255' : '0,255,0'},${alpha})`;
+            ctx.lineWidth = 2.5 * (1 - prog) + 0.5;
+            ctx.stroke();
+        }
+    }
+};
+
+export const PlayerAttachmentRegistry: Record<string, AttachmentRenderer> = {
+    spirit_lance: drawSpiritLance,
+    cyber_kora: drawCyberKora,
+    void_aura: drawVoidAura,
+    nanite_swarm: drawNaniteSwarm,
+    solar_chakram: drawSolarChakram,
+    void_wake: drawVoidWake,
+    drum_echo: drawDrumEcho,
+    paradox_pendulum: drawParadoxPendulum,
+    kaleidoscope_gaze: drawKaleidoscope,
+    fractal_bloom: drawFractalBloom,
+    ancestral_resonance: drawAncestralResonance,
+};
+
+// ---------------------------------------------------------------------------
+// Body-structural growth + secondary artifact/stat traits
+// ---------------------------------------------------------------------------
+
+export interface BodyStyle {
+    shellColor: string;     // octahedron wireframe stroke
+    shellLineWidth: number;
+    plate: number;          // 0..1 armor-plate fill strength on near faces
+    spike: number;          // spike length in px out from vertices (HIGH only)
+    coreTint?: string;      // optional core color override (non-jammed)
+}
+
+// Folds equipped weapons + artifacts/stats into one body style per frame.
+// Weapons are primary (they also tint the shell + grow spikes); artifacts/stats
+// are subtle, cheap, body-level traits — never competing orbiting geometry.
+export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyStyle => {
+    let shellColor = COLORS.white;
+    let shellLineWidth = 1.5;
+    let plate = 0;
+    let spike = 0;
+    let coreTint: string | undefined;
+
+    // Weapons: tint shell toward weapon colors, grow spikes with total level.
+    let totalLevel = 0;
+    for (const w of player.weapons) {
+        totalLevel += w.level;
+        // gentle blend so multiple weapons mix without washing out the white.
+        shellColor = lerpColor(shellColor, w.color, 0.12);
+        if (w.id === 'cyber_kora') coreTint = '#00FFFF';
+    }
+    if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
+
+    // Artifacts (subtle traits).
+    const arts = player.artifacts || [];
+    if (arts.includes('titan_frame')) { shellLineWidth += 1.0; plate += 0.5; }
+    if (arts.includes('data_siphon')) shellColor = lerpColor(shellColor, '#00FFFF', 0.25);
+    if (arts.includes('ancestral_focus')) shellColor = lerpColor(shellColor, COLORS.orange, 0.2);
+
+    // Stats: armor thickens/plates the shell; brighter when armored.
+    if (player.stats.armor > 0) { shellLineWidth += Math.min(1.0, player.stats.armor * 0.15); plate += Math.min(0.5, player.stats.armor * 0.1); }
+
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, coreTint };
+};
