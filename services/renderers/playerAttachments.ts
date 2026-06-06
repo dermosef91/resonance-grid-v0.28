@@ -177,6 +177,9 @@ const drawRing = (
 // SPIRIT LANCE -> orbiting energy crystals. VOLTAIC_ARC: cyan + arcs.
 // PHASE_DRILL: violet elongated shards.
 const drawSpiritLance: AttachmentRenderer = (a, w) => {
+    // Spirit Lance is the starting weapon — hold off the orbiting crystal until level 2
+    // so the player doesn't begin the run with it already attached.
+    if (w.level < 2) return;
     const { ctx, t, project, drawBack, slotPhase } = a;
     const phase = w.augment === 'PHASE_DRILL';
     const stroke = phase ? '#aa00ff' : (w.augment === 'VOLTAIC_ARC' ? '#00ccff' : '#00FFFF');
