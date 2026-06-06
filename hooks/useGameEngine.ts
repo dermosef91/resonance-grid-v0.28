@@ -1116,6 +1116,39 @@ export const useGameEngine = (
                         });
                     }
 
+                    // SOLAR_STORM: during the warning/storm window, point the player at the nearest
+                    // sheltered spot — a point inside a pillar's shadow band, not the pillar itself
+                    // (the safe zone is behind the pillar, away from the sun). Skip if already safe.
+                    if (m.type === MissionType.SOLAR_STORM) {
+                        const sd = m.customData?.solarData;
+                        if (sd && (sd.state === 'WARNING' || sd.state === 'STORM')) {
+                            const pp = playerRef.current.pos;
+                            const shadowDirX = -Math.cos(sd.sunAngle);
+                            const shadowDirY = -Math.sin(sd.sunAngle);
+                            const perpX = -shadowDirY; const perpY = shadowDirX;
+                            let alreadySafe = false;
+                            let bestPoint: { x: number, y: number } | null = null;
+                            let bestDistSq = Infinity;
+                            missionEntitiesRef.current.forEach((e: any) => {
+                                if (e.kind !== 'SOLAR_SHIELD') return;
+                                const dx = pp.x - e.pos.x; const dy = pp.y - e.pos.y;
+                                const along = dx * shadowDirX + dy * shadowDirY;
+                                const perp = dx * perpX + dy * perpY;
+                                const halfW = e.radius * 1.2;
+                                if (along > 0 && along < 800 && Math.abs(perp) < halfW) alreadySafe = true;
+                                // Nearest sheltered point inside this pillar's shadow band, biased
+                                // toward its depth/centre so the player ends up comfortably inside.
+                                const clampAlong = Math.min(800, Math.max(e.radius, along));
+                                const clampPerp = Math.max(-halfW * 0.6, Math.min(halfW * 0.6, perp));
+                                const tx = e.pos.x + shadowDirX * clampAlong + perpX * clampPerp;
+                                const ty = e.pos.y + shadowDirY * clampAlong + perpY * clampPerp;
+                                const dSq = (tx - pp.x) ** 2 + (ty - pp.y) ** 2;
+                                if (dSq < bestDistSq) { bestDistSq = dSq; bestPoint = { x: tx, y: ty }; }
+                            });
+                            if (!alreadySafe && bestPoint) targets.push({ pos: bestPoint, color: '#00FF00', label: 'SHELTER' });
+                        }
+                    }
+
                     let tutorialPickup: Pickup | null = null;
                     if (tutorialStep === 'COLLECT') {
                         let closestDistSq = Infinity; const pp = playerRef.current.pos;
