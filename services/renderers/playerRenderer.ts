@@ -252,7 +252,7 @@ export const drawPlayer = (
             if (full && bodyStyle.shatter > 0) {
                 const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
                 const len = Math.hypot(cx, cy, cz) || 1;
-                const push = bodyStyle.shatter * (0.7 + 0.3 * Math.sin(t * 2 + fi * 1.3)) / len;
+                const push = bodyStyle.shatter * (0.55 + 0.45 * Math.sin(t * 2 + fi * 1.3)) / len;
                 const dx = cx * push, dy = cy * push, dz = cz * push;
                 a = { x: a.x + dx, y: a.y + dy, z: a.z + dz };
                 b = { x: b.x + dx, y: b.y + dy, z: b.z + dz };
