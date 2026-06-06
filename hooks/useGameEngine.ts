@@ -1116,6 +1116,30 @@ export const useGameEngine = (
                         });
                     }
 
+                    // SOLAR_STORM: during the warning/storm window, point the player toward the
+                    // nearest shield pillar whose shadow can shelter them (skip if already sheltered).
+                    if (m.type === MissionType.SOLAR_STORM) {
+                        const sd = m.customData?.solarData;
+                        if (sd && (sd.state === 'WARNING' || sd.state === 'STORM')) {
+                            const pp = playerRef.current.pos;
+                            const shadowDirX = -Math.cos(sd.sunAngle);
+                            const shadowDirY = -Math.sin(sd.sunAngle);
+                            let alreadySafe = false;
+                            let closest: any = null;
+                            let closestDistSq = Infinity;
+                            missionEntitiesRef.current.forEach((e: any) => {
+                                if (e.kind !== 'SOLAR_SHIELD') return;
+                                const dx = pp.x - e.pos.x; const dy = pp.y - e.pos.y;
+                                const distAlongShadow = dx * shadowDirX + dy * shadowDirY;
+                                const distPerpShadow = dx * -shadowDirY + dy * shadowDirX;
+                                if (distAlongShadow > 0 && distAlongShadow < 800 && Math.abs(distPerpShadow) < e.radius * 1.2) alreadySafe = true;
+                                const dSq = dx * dx + dy * dy;
+                                if (dSq < closestDistSq) { closestDistSq = dSq; closest = e; }
+                            });
+                            if (!alreadySafe && closest) targets.push({ pos: closest.pos, color: '#00FF00', label: 'SHELTER' });
+                        }
+                    }
+
                     let tutorialPickup: Pickup | null = null;
                     if (tutorialStep === 'COLLECT') {
                         let closestDistSq = Infinity; const pp = playerRef.current.pos;
