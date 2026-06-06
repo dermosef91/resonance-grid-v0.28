@@ -252,7 +252,11 @@ export const drawPlayer = (
             if (full && bodyStyle.shatter > 0) {
                 const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
                 const len = Math.hypot(cx, cy, cz) || 1;
-                const push = bodyStyle.shatter * (0.55 + 0.45 * Math.sin(t * 2 + fi * 1.3)) / len;
+                // shatterJagged: deterministic per-face hash so faces shatter unevenly (ENTROPY_FIELD)
+                const jag = bodyStyle.shatterJagged
+                    ? 0.4 + 1.6 * (((Math.sin(fi * 12.9898) * 43758.5453) % 1) + 1) % 1
+                    : 1;
+                const push = bodyStyle.shatter * jag * (0.55 + 0.45 * Math.sin(t * 2 + fi * 1.3)) / len;
                 const dx = cx * push, dy = cy * push, dz = cz * push;
                 a = { x: a.x + dx, y: a.y + dy, z: a.z + dz };
                 b = { x: b.x + dx, y: b.y + dy, z: b.z + dz };
@@ -376,6 +380,27 @@ export const drawPlayer = (
         const segScale = 1 - s * 0.22;
         const yOff = s * (scale * 0.9);
         drawBodySegment(yOff, segScale, s === 0);
+    }
+
+    // Dual-shell: inner octahedron at 0.5× scale counter-rotating around Y (kaleidoscope_gaze).
+    if (bodyStyle.dualShell > 0) {
+        const inner = bodyStyle.dualShell * scale;
+        const ang = -t, dc = Math.cos(ang), ds = Math.sin(ang);
+        const iv = vertices.map(v => {
+            const rx = v.x * dc - v.z * ds, rz = v.x * ds + v.z * dc;
+            return projectPlayer3D(rx * inner, v.y * inner, rz * inner);
+        });
+        ctx.save();
+        ctx.globalAlpha *= 0.6;
+        ctx.strokeStyle = bodyStyle.shellColor;
+        ctx.lineWidth = bodyStyle.shellLineWidth * 0.7;
+        ctx.lineJoin = 'round';
+        faces.forEach(f => {
+            ctx.beginPath();
+            ctx.moveTo(iv[f[0]].x, iv[f[0]].y); ctx.lineTo(iv[f[1]].x, iv[f[1]].y); ctx.lineTo(iv[f[2]].x, iv[f[2]].y);
+            ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); ctx.stroke();
+        });
+        ctx.restore();
     }
 
     // FRONT PASS (in front of body, before the core)

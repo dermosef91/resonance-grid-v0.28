@@ -520,6 +520,8 @@ export interface BodyStyle {
     shatter: number;        // face-gap separation along normals → barely-held-together (0 = none)
     fringe: number;         // edge-bristle length fraction → sea-urchin (HIGH only, 0 = none)
     bud: number;            // child-octahedron size on faces → fractal bloom (HIGH only, 0 = none)
+    dualShell: number;      // counter-rotating inner shell scale multiplier (kaleidoscope_gaze). 0 = none
+    shatterJagged: boolean; // non-uniform per-face shatter via deterministic hash (void_aura + ENTROPY_FIELD)
     core: CoreStyle;
 }
 
@@ -584,6 +586,27 @@ const coreStyleFor = (w: Weapon): CoreStyle => {
     return c;
 };
 
+// Augment-conditional vertex morphs, layered on top of static SHELL_MORPHS.
+// Returns true when the shatterJagged flag should be set.
+const applyAugmentMorph = (w: Weapon, shellVerts: Vec3[]): boolean => {
+    if (!w.augment) return false;
+    if (w.id === 'spirit_lance' && w.augment === 'PHASE_DRILL') {
+        // spiral-drill: twist the equatorial ring on top of the forward dart
+        const a = 0.06 * w.level, c = Math.cos(a), s = Math.sin(a);
+        for (const i of [0, 1, 2, 3]) {
+            const { x, z } = shellVerts[i];
+            shellVerts[i].x = x * c - z * s; shellVerts[i].z = x * s + z * c;
+        }
+    }
+    if (w.id === 'cyber_kora' && w.augment === 'DISSONANCE_SHREDDER') {
+        // asymmetric/glitchy: hard-collapse one x-side, grow the other (overrides static pinch)
+        const s2 = Math.sign(shellVerts[2].x) || 1, s3 = Math.sign(shellVerts[3].x) || -1;
+        shellVerts[2].x = s2 * 0.30;
+        shellVerts[3].x = s3 * (1.0 + 0.10 * w.level);
+    }
+    return w.id === 'void_aura' && w.augment === 'ENTROPY_FIELD';
+};
+
 // Folds equipped weapons + artifacts/stats into one body style per frame.
 // Weapons drive shell tint, vertex morphs, spikes, and the core; artifacts/stats
 // add subtle plating/tints. Built once per frame, no orbiting geometry here.
@@ -601,6 +624,8 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let shatter = 0;
     let fringe = 0;
     let bud = 0;
+    let dualShell = 0;
+    let shatterJagged = false;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -652,6 +677,8 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
             fringe = Math.max(fringe, 0.25 + w.level * 0.05); // sea-urchin edge bristles
             bud = Math.max(bud, 0.12 + w.level * 0.03);       // recursive child octahedra
         }
+        if (w.id === 'kaleidoscope_gaze') dualShell = Math.max(dualShell, 0.5);
+        if (applyAugmentMorph(w, shellVerts)) shatterJagged = true;
     }
     if (quality === 'HIGH') {
         spike = Math.min(10, totalLevel * 0.5);
@@ -669,5 +696,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, bulge, bevel, segments, shatter, fringe, bud, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, bulge, bevel, segments, shatter, fringe, bud, dualShell, shatterJagged, core };
 };
