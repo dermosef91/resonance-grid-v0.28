@@ -167,7 +167,10 @@ export const drawPlayer = (
     const rollingPitch = -player.distanceTraveled * 0.04;
     const yaw = player.rotation;
     const pitch = rollingPitch;
-    const roll = Math.cos(t * 0.5) * 0.1;
+    // Bank: lean the shell off-axis into lateral movement (velocity perpendicular to facing).
+    const lateralV = -player.velocity.x * Math.sin(yaw) + player.velocity.y * Math.cos(yaw);
+    const bank = Math.max(-0.3, Math.min(0.3, lateralV * 0.06));
+    const roll = Math.cos(t * 0.5) * 0.1 + bank;
     const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
     const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
     const cosR = Math.cos(roll), sinR = Math.sin(roll);
@@ -222,9 +225,13 @@ export const drawPlayer = (
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
     // Cyclic neighbour ring per vertex (for the truncated bevel cap quads).
     const vertNeighbours = [[2, 4, 3, 5], [2, 4, 3, 5], [0, 4, 1, 5], [0, 4, 1, 5], [0, 2, 1, 3], [0, 2, 1, 3]];
+    // The 12 octahedron edges (all vert pairs except the 3 opposite poles) — for edge fringe.
+    const octaEdges: [number, number][] = [[0, 2], [0, 3], [0, 4], [0, 5], [1, 2], [1, 3], [1, 4], [1, 5], [2, 4], [2, 5], [3, 4], [3, 5]];
+    const budDirs = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]]; // child-octahedron axes
     ctx.lineJoin = 'round';
 
-    // Draws the whole shell (faces + plate + bulge + bevel + belt + spikes) once, at a
+    // Draws the whole shell (faces + shatter + plate + bulge + bevel + belt + spikes +
+    // fringe + buds) once, at a
     // given model-y offset and scale. Stacked segments reuse this; single-segment builds
     // call it once with (0, 1, true) for byte-identical output vs. before this batch.
     const drawBodySegment = (modelYOffset: number, segScale: number, isMain: boolean) => {
@@ -238,14 +245,25 @@ export const drawPlayer = (
         const projVerts = vertices.map(v => projV(v.x, v.y, v.z));
 
         ctx.lineWidth = bodyStyle.shellLineWidth;
-        faces.forEach(f => {
-            const v0 = projVerts[f[0]]; const v1 = projVerts[f[1]]; const v2 = projVerts[f[2]];
+        faces.forEach((f, fi) => {
+            // Face-gap shatter: push the whole face outward along its own normal (animated)
+            // so adjacent faces separate and the body reads as barely held together.
+            let a = vertices[f[0]], b = vertices[f[1]], c = vertices[f[2]];
+            if (full && bodyStyle.shatter > 0) {
+                const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
+                const len = Math.hypot(cx, cy, cz) || 1;
+                const push = bodyStyle.shatter * (0.7 + 0.3 * Math.sin(t * 2 + fi * 1.3)) / len;
+                const dx = cx * push, dy = cy * push, dz = cz * push;
+                a = { x: a.x + dx, y: a.y + dy, z: a.z + dz };
+                b = { x: b.x + dx, y: b.y + dy, z: b.z + dz };
+                c = { x: c.x + dx, y: c.y + dy, z: c.z + dz };
+            }
+            const v0 = projV(a.x, a.y, a.z), v1 = projV(b.x, b.y, b.z), v2 = projV(c.x, c.y, c.z);
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.strokeStyle = bodyStyle.shellColor;
             ctx.lineWidth = bodyStyle.shellLineWidth;
             if (full && bodyStyle.bulge > 0) {
                 // Inflate: raise the face centroid and fan into 3 sub-triangles → rounded blob.
-                const a = vertices[f[0]], b = vertices[f[1]], c = vertices[f[2]];
                 const k = 1 + bodyStyle.bulge;
                 const pc = projV((a.x + b.x + c.x) / 3 * k, (a.y + b.y + c.y) / 3 * k, (a.z + b.z + c.z) / 3 * k);
                 const edges: [typeof v0, typeof v0][] = [[v0, v1], [v1, v2], [v2, v0]];
@@ -316,6 +334,37 @@ export const drawPlayer = (
                 const base = projV(v.x * baseR, v.y * baseR, v.z * baseR);
                 const tip = projV(v.x * tipR, v.y * tipR, v.z * tipR);
                 ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+            });
+        }
+
+        // Edge spike-fringe: a bristle from each of the 12 edge midpoints → sea-urchin look
+        // (HIGH only, main only). fringe scales with fractal_bloom level / high total level.
+        if (isMain && bodyStyle.fringe > 0) {
+            const fl = bodyStyle.fringe;
+            ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1;
+            octaEdges.forEach(([i, j]) => {
+                const a = vertices[i], b = vertices[j];
+                const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
+                const base = projV(mx, my, mz);
+                const tip = projV(mx * (1 + fl), my * (1 + fl), mz * (1 + fl));
+                ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+            });
+        }
+
+        // Face budding: sprout a tiny child octahedron from alternating faces → fractal bloom
+        // (HIGH only, main only). Recursive silhouette that grows with fractal_bloom level.
+        if (isMain && bodyStyle.bud > 0) {
+            const r = bodyStyle.bud;
+            ctx.strokeStyle = bodyStyle.shellColor; ctx.lineWidth = 1;
+            [0, 2, 4, 6].forEach(fi => {
+                const f = faces[fi];
+                const a = vertices[f[0]], b = vertices[f[1]], c = vertices[f[2]];
+                const ox = (a.x + b.x + c.x) / 3 * 1.25, oy = (a.y + b.y + c.y) / 3 * 1.25, oz = (a.z + b.z + c.z) / 3 * 1.25;
+                const cv = budDirs.map(d => projV(ox + d[0] * r, oy + d[1] * r, oz + d[2] * r));
+                faces.forEach(cf => {
+                    const p0 = cv[cf[0]], p1 = cv[cf[1]], p2 = cv[cf[2]];
+                    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.closePath(); ctx.stroke();
+                });
             });
         }
     };
