@@ -514,6 +514,9 @@ export interface BodyStyle {
     bulge: number;          // face-centroid outward push fraction → rounded blob (0 = none)
     bevel: number;          // 0..~0.35 edge fraction for truncated vertex cap quads (0 = none)
     segments: number;       // stacked body copies → totem/insectoid (1 = single)
+    shatter: number;        // face-gap separation along normals → barely-held-together (0 = none)
+    fringe: number;         // edge-bristle length fraction → sea-urchin (HIGH only, 0 = none)
+    bud: number;            // child-octahedron size on faces → fractal bloom (HIGH only, 0 = none)
     core: CoreStyle;
 }
 
@@ -592,6 +595,9 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let bulge = 0;
     let bevel = 0;
     let segments = 1;
+    let shatter = 0;
+    let fringe = 0;
+    let bud = 0;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -638,8 +644,16 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
             undulate = Math.max(undulate, 0.04 + w.level * 0.004); // living wobble
             bulge = Math.max(bulge, 0.10 + w.level * 0.02);        // rounded organic blob
         }
+        if (w.id === 'paradox_pendulum') shatter = Math.max(shatter, Math.min(0.25, 0.06 + w.level * 0.02)); // barely-held-together
+        if (w.id === 'fractal_bloom' && quality === 'HIGH') {
+            fringe = Math.max(fringe, 0.25 + w.level * 0.05); // sea-urchin edge bristles
+            bud = Math.max(bud, 0.12 + w.level * 0.03);       // recursive child octahedra
+        }
     }
-    if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
+    if (quality === 'HIGH') {
+        spike = Math.min(10, totalLevel * 0.5);
+        if (totalLevel >= 30) fringe = Math.max(fringe, 0.2); // high total level bristles regardless of build
+    }
 
     // Artifacts (subtle traits).
     const arts = player.artifacts || [];
@@ -652,5 +666,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, bulge, bevel, segments, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, bulge, bevel, segments, shatter, fringe, bud, core };
 };
