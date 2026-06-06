@@ -514,6 +514,10 @@ export interface BodyStyle {
     faceGap: number;        // face centroid-push fraction — "barely held together" (void_aura)
     edgeFringe: number;     // bristle spike length from edge midpoints in px (fractal_bloom)
     stacks: number;         // ghost-ring segment count above/below shell (ancestral_resonance)
+    bevel: number;          // cuboctahedron tip-cut cap size (nanite_swarm). 0 = none
+    bud: number;            // child-octahedron budding add-on (fractal_bloom). 0 = none
+    dualShell: number;      // counter-rotating inner shell scale multiplier (kaleidoscope_gaze). 0 = none
+    faceGapJagged: boolean; // non-uniform per-face shatter (void_aura + ENTROPY_FIELD)
     core: CoreStyle;
 }
 
@@ -578,6 +582,27 @@ const coreStyleFor = (w: Weapon): CoreStyle => {
     return c;
 };
 
+// Augment-conditional vertex morphs, layered on top of static SHELL_MORPHS.
+// Returns true when the faceGapJagged flag should be set.
+const applyAugmentMorph = (w: Weapon, shellVerts: Vec3[]): boolean => {
+    if (!w.augment) return false;
+    if (w.id === 'spirit_lance' && w.augment === 'PHASE_DRILL') {
+        // spiral-drill: twist the equatorial ring on top of the forward dart
+        const a = 0.06 * w.level, c = Math.cos(a), s = Math.sin(a);
+        for (const i of [0, 1, 2, 3]) {
+            const { x, z } = shellVerts[i];
+            shellVerts[i].x = x * c - z * s; shellVerts[i].z = x * s + z * c;
+        }
+    }
+    if (w.id === 'cyber_kora' && w.augment === 'DISSONANCE_SHREDDER') {
+        // asymmetric/glitchy: hard-collapse one x-side, grow the other (overrides static pinch)
+        const s2 = Math.sign(shellVerts[2].x) || 1, s3 = Math.sign(shellVerts[3].x) || -1;
+        shellVerts[2].x = s2 * 0.30;
+        shellVerts[3].x = s3 * (1.0 + 0.10 * w.level);
+    }
+    return w.id === 'void_aura' && w.augment === 'ENTROPY_FIELD';
+};
+
 // Folds equipped weapons + artifacts/stats into one body style per frame.
 // Weapons drive shell tint, vertex morphs, spikes, and the core; artifacts/stats
 // add subtle plating/tints. Built once per frame, no orbiting geometry here.
@@ -592,6 +617,10 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
     let faceGap = 0;
     let stacks = 0;
     let fractalBloomLevel = 0;
+    let bevel = 0;
+    let bud = 0;
+    let dualShell = 0;
+    let faceGapJagged = false;
 
     // Morphed shell vertices (clone the base so we never mutate it).
     const shellVerts: Vec3[] = BASE_SHELL_VERTS.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -627,10 +656,12 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
             }
         }
         if (w.id === 'drum_echo') { breath = Math.max(breath, 0.05 + w.level * 0.005); undulate = Math.max(undulate, 0.012 + w.level * 0.006); }
-        if (w.id === 'nanite_swarm') belt = Math.max(belt, 0.08 + w.level * 0.04);
+        if (w.id === 'nanite_swarm') { belt = Math.max(belt, 0.08 + w.level * 0.04); bevel = Math.max(bevel, 0.05 + w.level * 0.03); }
         if (w.id === 'void_aura') faceGap = Math.max(faceGap, 0.04 + w.level * 0.025);
-        if (w.id === 'fractal_bloom') fractalBloomLevel = w.level;
+        if (w.id === 'fractal_bloom') { fractalBloomLevel = w.level; bud = Math.max(bud, 0.10 + w.level * 0.02); }
         if (w.id === 'ancestral_resonance') stacks = Math.max(stacks, w.level >= 4 ? 2 : 1);
+        if (w.id === 'kaleidoscope_gaze') dualShell = Math.max(dualShell, 0.5);
+        if (applyAugmentMorph(w, shellVerts)) faceGapJagged = true;
     }
     if (quality === 'HIGH') spike = Math.min(10, totalLevel * 0.5);
     const edgeFringe = fractalBloomLevel > 0 ? fractalBloomLevel * 0.55 + Math.min(4, totalLevel * 0.08) : 0;
@@ -647,5 +678,5 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
 
     const core = topWeapon ? coreStyleFor(topWeapon) : defaultCore();
 
-    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, faceGap, edgeFringe, stacks, core };
+    return { shellColor, shellLineWidth, plate: Math.min(1, plate), spike, shellVerts, breath, belt, undulate, faceGap, edgeFringe, stacks, bevel, bud, dualShell, faceGapJagged, core };
 };

@@ -227,12 +227,15 @@ export const drawPlayer = (
     });
     const faces = [[0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]];
     ctx.lineWidth = bodyStyle.shellLineWidth; ctx.lineJoin = 'round';
-    faces.forEach(f => {
+    faces.forEach((f, fi) => {
         const v0 = projVerts[f[0]], v1 = projVerts[f[1]], v2 = projVerts[f[2]];
         let p0x = v0.x, p0y = v0.y, p1x = v1.x, p1y = v1.y, p2x = v2.x, p2y = v2.y;
         if (bodyStyle.faceGap > 0) {
             const cx = (p0x + p1x + p2x) / 3, cy = (p0y + p1y + p2y) / 3;
-            const g = bodyStyle.faceGap;
+            const jag = bodyStyle.faceGapJagged
+                ? 0.4 + 1.6 * (((Math.sin(fi * 12.9898) * 43758.5453) % 1) + 1) % 1
+                : 1;
+            const g = bodyStyle.faceGap * jag;
             p0x += (p0x - cx) * g; p0y += (p0y - cy) * g;
             p1x += (p1x - cx) * g; p1y += (p1y - cy) * g;
             p2x += (p2x - cx) * g; p2y += (p2y - cy) * g;
@@ -255,6 +258,27 @@ export const drawPlayer = (
             ctx.stroke();
         }
     });
+
+    // Dual-shell: inner octahedron at 0.5 scale counter-rotating around Y (kaleidoscope_gaze).
+    if (bodyStyle.dualShell > 0) {
+        const inner = bodyStyle.dualShell * scale;
+        const ang = -t, dc = Math.cos(ang), ds = Math.sin(ang);
+        const iv = vertices.map(v => {
+            const rx = v.x * dc - v.z * ds, rz = v.x * ds + v.z * dc;
+            return projectPlayer3D(rx * inner, v.y * inner, rz * inner);
+        });
+        ctx.save();
+        ctx.globalAlpha *= 0.6;
+        ctx.strokeStyle = bodyStyle.shellColor;
+        ctx.lineWidth = bodyStyle.shellLineWidth * 0.7;
+        ctx.lineJoin = 'round';
+        faces.forEach(f => {
+            ctx.beginPath();
+            ctx.moveTo(iv[f[0]].x, iv[f[0]].y); ctx.lineTo(iv[f[1]].x, iv[f[1]].y); ctx.lineTo(iv[f[2]].x, iv[f[2]].y);
+            ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); ctx.stroke();
+        });
+        ctx.restore();
+    }
 
     // Equatorial belt: 4 diagonal facets (NE/NW/SW/SE) pushed outward from the
     // mid-ring, forming a wider bipyramid/gem shape (nanite_swarm).
@@ -323,8 +347,58 @@ export const drawPlayer = (
         });
     }
 
+    // Bevel caps: small square cap perpendicular to each vertex axis at ~0.8 vert distance
+    // — cuboctahedron "tip-cut" look (nanite_swarm).
+    if (bodyStyle.bevel > 0) {
+        const capR = bodyStyle.bevel * scale;
+        ctx.strokeStyle = bodyStyle.shellColor;
+        ctx.lineWidth = bodyStyle.shellLineWidth * 0.8;
+        ctx.lineJoin = 'round';
+        vertices.forEach(v => {
+            const len = Math.hypot(v.x, v.y, v.z) || 1;
+            const nx = v.x / len, ny = v.y / len, nz = v.z / len;
+            const useY = Math.abs(ny) < 0.9;
+            const rx = useY ? 0 : 1, ry = useY ? 1 : 0, rz = 0;
+            let ux = ny * rz - nz * ry, uy = nz * rx - nx * rz, uz = nx * ry - ny * rx;
+            const ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+            const wx = ny * uz - nz * uy, wy = nz * ux - nx * uz, wz = nx * uy - ny * ux;
+            const cx = v.x * 0.8 * scale, cy = v.y * 0.8 * scale, cz = v.z * 0.8 * scale;
+            ctx.beginPath();
+            for (let k = 0; k <= 4; k++) {
+                const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+                const ox = (Math.cos(a) * ux + Math.sin(a) * wx) * capR;
+                const oy = (Math.cos(a) * uy + Math.sin(a) * wy) * capR;
+                const oz = (Math.cos(a) * uz + Math.sin(a) * wz) * capR;
+                const p = projectPlayer3D(cx + ox, cy + oy, cz + oz);
+                if (k === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            }
+            ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill(); ctx.stroke();
+        });
+    }
+
     // FRONT PASS (in front of body, before the core)
     runAttachments(false);
+
+    // Face budding: a tiny child octahedron offset along the forward +x axis (fractal_bloom).
+    if (bodyStyle.bud > 0) {
+        const childScale = (0.25 + bodyStyle.bud) * scale;
+        const fv = vertices[2];
+        const fl = Math.hypot(fv.x, fv.y, fv.z) || 1;
+        const offMag = scale * 1.25;
+        const ox = (fv.x / fl) * offMag, oy = (fv.y / fl) * offMag, oz = (fv.z / fl) * offMag;
+        const cv = vertices.map(v => projectPlayer3D(v.x * childScale + ox, v.y * childScale + oy, v.z * childScale + oz));
+        ctx.save();
+        ctx.globalAlpha *= 0.5;
+        ctx.strokeStyle = bodyStyle.shellColor;
+        ctx.lineWidth = bodyStyle.shellLineWidth * 0.7;
+        ctx.lineJoin = 'round';
+        faces.forEach(f => {
+            ctx.beginPath();
+            ctx.moveTo(cv[f[0]].x, cv[f[0]].y); ctx.lineTo(cv[f[1]].x, cv[f[1]].y); ctx.lineTo(cv[f[2]].x, cv[f[2]].y);
+            ctx.closePath(); ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill(); ctx.stroke();
+        });
+        ctx.restore();
+    }
 
     // --- CORE (Icosahedron) — morphed per signature weapon ---
     {
