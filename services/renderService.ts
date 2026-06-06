@@ -11,11 +11,21 @@ import { drawMissionEntity } from './renderers/MissionRenderer';
 import { drawAbyssalLoop } from './renderers/EffectRenderer';
 import { drawProjectiles } from './renderers/ProjectileRenderer';
 import { drawObstacle } from './renderers/ObstacleRenderer';
-import { getNeonQuality, setGlowPulse, beatPulse } from './renderers/neonRender';
+import { getNeonQuality, setGlowPulse, beatPulse, neonStroke, neonOrb } from './renderers/neonRender';
 
 // --- Offscreen bloom buffer (cached across frames to avoid per-frame allocation) ---
 let bloomCanvas: HTMLCanvasElement | null = null;
 let bloomCtx: CanvasRenderingContext2D | null = null;
+
+// Reused per-frame scratch buffers (emptied in place each frame) so the render
+// loop doesn't allocate fresh arrays for the light/distortion/shockwave/draw
+// queues every frame. renderGame runs once per frame synchronously, and these
+// are fully consumed within a single frame, so sharing module-level buffers is
+// safe.
+const _lightSources: LightSource[] = [];
+const _distortionSources: DistortionSource[] = [];
+const _renderShockwaves: Shockwave[] = [];
+const _renderQueue: Array<{ y: number; draw: () => void }> = [];
 
 // Bright-pass downscale + blur, composited back additively so neon/energy glows.
 const applyBloom = (ctx: CanvasRenderingContext2D, dpr: number) => {
@@ -182,9 +192,10 @@ export const renderGame = (
     };
 
     // --- Dynamic Light Sources & Distortion Sources ---
-    const lightSources: LightSource[] = [];
-    const distortionSources: DistortionSource[] = [];
-    const renderShockwaves: Shockwave[] = [...shockwaves];
+    const lightSources = _lightSources; lightSources.length = 0;
+    const distortionSources = _distortionSources; distortionSources.length = 0;
+    const renderShockwaves = _renderShockwaves; renderShockwaves.length = 0;
+    for (let i = 0; i < shockwaves.length; i++) renderShockwaves.push(shockwaves[i]);
 
     // PLAYER
     lightSources.push({
@@ -665,11 +676,7 @@ export const renderGame = (
 
     // --- RENDER QUEUE FOR DEPTH SORTING ---
     // Collect all "Tall" entities: Player, Enemies, Obstacles, Replicas, and vertical Mission Entities
-    type RenderItem = {
-        y: number;
-        draw: () => void;
-    };
-    const renderQueue: RenderItem[] = [];
+    const renderQueue = _renderQueue; renderQueue.length = 0;
 
     // 1. OBSTACLES
     obstacles.forEach(obs => {
@@ -757,41 +764,36 @@ export const renderGame = (
                         const autoRoll = frame * 0.02;
                         const autoPitch = frame * 0.03;
 
-                        ctx.lineWidth = 1.5;
-                        ctx.shadowBlur = 10;
-                        ctx.shadowColor = '#00FF88';
+                        // Batch every edge into one additive neon stroke instead of
+                        // stroking each edge with shadowBlur active (which re-rasters
+                        // a blur per edge). Adaptive quality collapses this to a single
+                        // cheap pass on LOW.
+                        neonStroke(ctx, (c) => {
+                            edges.forEach(e => {
+                                const v1 = verts[e[0]];
+                                const v2 = verts[e[1]];
+                                // Rotate V1
+                                let y1 = v1.y * Math.cos(autoRoll) - v1.z * Math.sin(autoRoll);
+                                let z1 = v1.y * Math.sin(autoRoll) + v1.z * Math.cos(autoRoll);
+                                let x1 = v1.x * Math.cos(autoPitch) - z1 * Math.sin(autoPitch);
+                                z1 = v1.x * Math.sin(autoPitch) + z1 * Math.cos(autoPitch); // Update z1
 
-                        edges.forEach(e => {
-                            const v1 = verts[e[0]];
-                            const v2 = verts[e[1]];
-                            // Rotate V1
-                            let y1 = v1.y * Math.cos(autoRoll) - v1.z * Math.sin(autoRoll);
-                            let z1 = v1.y * Math.sin(autoRoll) + v1.z * Math.cos(autoRoll);
-                            let x1 = v1.x * Math.cos(autoPitch) - z1 * Math.sin(autoPitch);
-                            z1 = v1.x * Math.sin(autoPitch) + z1 * Math.cos(autoPitch); // Update z1
+                                // Rotate V2
+                                let y2 = v2.y * Math.cos(autoRoll) - v2.z * Math.sin(autoRoll);
+                                let z2 = v2.y * Math.sin(autoRoll) + v2.z * Math.cos(autoRoll);
+                                let x2 = v2.x * Math.cos(autoPitch) - z2 * Math.sin(autoPitch);
+                                z2 = v2.x * Math.sin(autoPitch) + z2 * Math.cos(autoPitch);
 
-                            // Rotate V2
-                            let y2 = v2.y * Math.cos(autoRoll) - v2.z * Math.sin(autoRoll);
-                            let z2 = v2.y * Math.sin(autoRoll) + v2.z * Math.cos(autoRoll);
-                            let x2 = v2.x * Math.cos(autoPitch) - z2 * Math.sin(autoPitch);
-                            z2 = v2.x * Math.sin(autoPitch) + z2 * Math.cos(autoPitch);
-
-                            const p1 = _proj(x1, y1, z1);
-                            const p2 = _proj(x2, y2, z2);
-
-                            ctx.strokeStyle = '#00FF88';
-                            ctx.beginPath();
-                            ctx.moveTo(p1.x, p1.y);
-                            ctx.lineTo(p2.x, p2.y);
-                            ctx.stroke();
-                        });
+                                const p1 = _proj(x1, y1, z1);
+                                const p2 = _proj(x2, y2, z2);
+                                c.moveTo(p1.x, p1.y);
+                                c.lineTo(p2.x, p2.y);
+                            });
+                        }, '#00FF88', { width: 1.5 });
 
                         // Center Core
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.shadowBlur = 20;
                         const core = _proj(0, 0, 0);
-                        ctx.beginPath(); ctx.arc(core.x, core.y, 4, 0, Math.PI * 2); ctx.fill();
-                        ctx.shadowBlur = 0;
+                        neonOrb(ctx, core.x, core.y, 4, '#FFFFFF');
 
                     }
                     else if (type === 'SUPPORT') {
@@ -799,15 +801,15 @@ export const renderGame = (
                         const r1 = 16; const r2 = 22; const segs = 8;
                         const c = '#FF8800';
 
-                        // Draw Ring
-                        ctx.beginPath();
-                        for (let i = 0; i <= segs; i++) {
-                            const a = (i / segs) * Math.PI * 2 + t;
-                            const p = _proj(Math.cos(a) * r2, Math.sin(a) * r2, 0);
-                            if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-                        }
-                        ctx.closePath();
-                        ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = c; ctx.stroke(); ctx.shadowBlur = 0;
+                        // Draw Ring (additive neon instead of shadowBlur)
+                        neonStroke(ctx, (cc) => {
+                            for (let i = 0; i <= segs; i++) {
+                                const a = (i / segs) * Math.PI * 2 + t;
+                                const p = _proj(Math.cos(a) * r2, Math.sin(a) * r2, 0);
+                                if (i === 0) cc.moveTo(p.x, p.y); else cc.lineTo(p.x, p.y);
+                            }
+                            cc.closePath();
+                        }, c, { width: 2 });
 
                         // Floating bits
                         for (let i = 0; i < 3; i++) {

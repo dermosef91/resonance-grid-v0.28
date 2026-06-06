@@ -2,9 +2,28 @@
 import { Entity, EntityType, EnemyType, Enemy, Projectile, Vector2, Obstacle } from '../types';
 
 // --- SPATIAL PARTITIONING ---
+// Perf: keys are packed integers (not template-literal strings) so inserting an
+// entity into a cell allocates nothing, and queries dedup via a per-query stamp
+// instead of building a `Set` + `Array.from` every call. With the grid rebuilt
+// every frame and queried per-projectile/per-enemy, those allocations dominated
+// GC pressure under load.
+//
+// Key packing: cell coords are offset into a non-negative range and packed as
+// `(gx + OFFSET) * STRIDE + (gy + OFFSET)`. Distinct cells can only collide if a
+// coord exceeds ±OFFSET cells (~6.5M world units at cellSize 200); a collision
+// merely yields extra candidates that the real distance check filters out, so it
+// is safe, never incorrect.
+const SH_OFFSET = 1 << 15;       // 32768 cells either side of origin
+const SH_STRIDE = 1 << 16;       // 65536, > 2*OFFSET so packing is unique
+
 export class SpatialHash {
     cellSize: number;
-    cells: Map<string, Entity[]>;
+    cells: Map<number, Entity[]>;
+    private queryId = 0;
+    // Pool of emptied cell arrays so rebuilding the grid each frame reuses backing
+    // arrays instead of allocating new ones, while still dropping the Map keys so
+    // stale cells don't accumulate as the player roams the world.
+    private freeList: Entity[][] = [];
 
     constructor(cellSize: number) {
         this.cellSize = cellSize;
@@ -12,49 +31,97 @@ export class SpatialHash {
     }
 
     clear() {
+        for (const cell of this.cells.values()) {
+            cell.length = 0;
+            this.freeList.push(cell);
+        }
         this.cells.clear();
     }
 
-    private getKey(x: number, y: number): string {
-        return `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+    private packKey(gx: number, gy: number): number {
+        return (gx + SH_OFFSET) * SH_STRIDE + (gy + SH_OFFSET);
     }
 
     add(entity: Entity) {
-        const minX = Math.floor((entity.pos.x - entity.radius) / this.cellSize);
-        const maxX = Math.floor((entity.pos.x + entity.radius) / this.cellSize);
-        const minY = Math.floor((entity.pos.y - entity.radius) / this.cellSize);
-        const maxY = Math.floor((entity.pos.y + entity.radius) / this.cellSize);
+        const cs = this.cellSize;
+        const minX = Math.floor((entity.pos.x - entity.radius) / cs);
+        const maxX = Math.floor((entity.pos.x + entity.radius) / cs);
+        const minY = Math.floor((entity.pos.y - entity.radius) / cs);
+        const maxY = Math.floor((entity.pos.y + entity.radius) / cs);
 
         for (let x = minX; x <= maxX; x++) {
             for (let y = minY; y <= maxY; y++) {
-                const key = `${x},${y}`;
-                if (!this.cells.has(key)) {
-                    this.cells.set(key, []);
+                const key = this.packKey(x, y);
+                let cell = this.cells.get(key);
+                if (!cell) {
+                    cell = this.freeList.pop() || [];
+                    this.cells.set(key, cell);
                 }
-                this.cells.get(key)!.push(entity);
+                cell.push(entity);
             }
         }
     }
 
+    // Returns a fresh array (safe for callers to hold), but avoids the per-query
+    // Set by stamping each entity with the current query id.
     query(pos: Vector2, radius: number): Entity[] {
-        const results = new Set<Entity>();
-        const minX = Math.floor((pos.x - radius) / this.cellSize);
-        const maxX = Math.floor((pos.x + radius) / this.cellSize);
-        const minY = Math.floor((pos.y - radius) / this.cellSize);
-        const maxY = Math.floor((pos.y + radius) / this.cellSize);
+        const results: Entity[] = [];
+        const qid = ++this.queryId;
+        const cs = this.cellSize;
+        const minX = Math.floor((pos.x - radius) / cs);
+        const maxX = Math.floor((pos.x + radius) / cs);
+        const minY = Math.floor((pos.y - radius) / cs);
+        const maxY = Math.floor((pos.y + radius) / cs);
 
         for (let x = minX; x <= maxX; x++) {
             for (let y = minY; y <= maxY; y++) {
-                const key = `${x},${y}`;
-                const cell = this.cells.get(key);
-                if (cell) {
-                    for (let i = 0; i < cell.length; i++) {
-                        results.add(cell[i]);
-                    }
+                const cell = this.cells.get(this.packKey(x, y));
+                if (!cell) continue;
+                for (let i = 0; i < cell.length; i++) {
+                    const e = cell[i];
+                    if (e._qStamp === qid) continue;
+                    e._qStamp = qid;
+                    results.push(e);
                 }
             }
         }
-        return Array.from(results);
+        return results;
+    }
+
+    // Broad-phase for line-shaped projectiles (beams). Walks the cells in the
+    // segment's bounding box and keeps only those whose centre is within
+    // `radius` (+ a cell-diagonal slack) of the segment, so a long beam visits a
+    // thin strip of cells instead of forcing a full enemy scan. Real hit testing
+    // (checkBeamCollision) still runs on the returned candidates.
+    queryBeam(start: Vector2, end: Vector2, radius: number): Entity[] {
+        const results: Entity[] = [];
+        const qid = ++this.queryId;
+        const cs = this.cellSize;
+        const minX = Math.floor((Math.min(start.x, end.x) - radius) / cs);
+        const maxX = Math.floor((Math.max(start.x, end.x) + radius) / cs);
+        const minY = Math.floor((Math.min(start.y, end.y) - radius) / cs);
+        const maxY = Math.floor((Math.max(start.y, end.y) + radius) / cs);
+        // Slack accounts for a cell's half-diagonal so we never drop a cell the
+        // segment clips through but whose centre sits just outside `radius`.
+        const slack = radius + cs * 0.7072;
+        const slackSq = slack * slack;
+
+        for (let x = minX; x <= maxX; x++) {
+            for (let y = minY; y <= maxY; y++) {
+                const cx = (x + 0.5) * cs;
+                const cy = (y + 0.5) * cs;
+                if (distToSegmentSquared({ x: cx, y: cy }, start, end) > slackSq) continue;
+                const cell = this.cells.get(this.packKey(x, y));
+                if (!cell) continue;
+                for (let i = 0; i < cell.length; i++) {
+                    const e = cell[i];
+                    if (e._qStamp === qid) continue;
+                    e._qStamp = qid;
+                    results.push(e);
+                }
+            }
+        }
+        return results;
     }
 }
 

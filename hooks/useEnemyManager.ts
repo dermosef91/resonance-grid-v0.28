@@ -19,12 +19,21 @@ export const useEnemyManager = (gameState: any) => {
     const addEnemies = useCallback((newEnemies: Enemy[]) => {
         const candidates: Enemy[] = [];
 
+        // Count current live population per capped type once, instead of filtering
+        // the whole enemy list for every candidate (was O(types_capped * n)).
+        const typeCounts = new Map<EnemyType, number>();
+        for (const existing of enemiesRef.current as Enemy[]) {
+            if (existing.markedForDeletion) continue;
+            if (ENEMY_CAPS[existing.enemyType] === undefined) continue;
+            typeCounts.set(existing.enemyType, (typeCounts.get(existing.enemyType) || 0) + 1);
+        }
+
         newEnemies.forEach(e => {
             const cap = ENEMY_CAPS[e.enemyType];
             if (cap !== undefined) {
-                const currentCount = enemiesRef.current.filter((existing: Enemy) => existing.enemyType === e.enemyType && !existing.markedForDeletion).length;
-                const pendingCount = candidates.filter(pending => pending.enemyType === e.enemyType).length;
-                if (currentCount + pendingCount >= cap) return;
+                const count = typeCounts.get(e.enemyType) || 0;
+                if (count >= cap) return;
+                typeCounts.set(e.enemyType, count + 1);
             }
             candidates.push(e);
         });

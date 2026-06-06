@@ -5,6 +5,7 @@ import { ALL_ENEMIES_DB, generateRunWaves } from '../../services/gameData';
 import { OverlayContainer } from '../Common';
 import { audioEngine, MusicTheme } from '../../services/audioEngine';
 import { graphicsSettings, GraphicsSettingKey } from '../../services/graphicsSettings';
+import { adaptiveQuality, setAdaptiveQualityEnabled, forceQualityLevel } from '../../services/adaptiveQuality';
 
 export const DebugMenu: React.FC<{
     generateOptions: () => UpgradeOption[],
@@ -353,7 +354,26 @@ export const DebugMenu: React.FC<{
 
                     {tab === 'GFX' && (
                         <div className="flex flex-col gap-3">
-                            <div className="text-green-700 font-bold mb-1 border-b border-gray-800">GRAPHICS FIDELITY</div>
+                            <div className="text-green-700 font-bold mb-1 border-b border-gray-800">ADAPTIVE QUALITY</div>
+                            <div className="text-[10px] text-gray-500 mb-1">Auto-sheds neon glow passes and bloom when the frame budget is blown, restoring them when there's headroom. Force a level to A/B test or pin fidelity.</div>
+                            <div className="flex gap-2 flex-wrap items-center">
+                                <button
+                                    className={`px-3 py-2 font-bold uppercase border ${adaptiveQuality.enabled ? 'border-green-500 bg-green-900/30 text-white' : 'border-gray-700 bg-gray-900 text-gray-400'}`}
+                                    onClick={() => { setAdaptiveQualityEnabled(!adaptiveQuality.enabled); setRefreshCounter(p => p + 1); }}
+                                >
+                                    Auto: {adaptiveQuality.enabled ? 'ON' : 'OFF'}
+                                </button>
+                                {['0 · High+Bloom', '1 · High', '2 · Low'].map((label, lvl) => (
+                                    <button
+                                        key={lvl}
+                                        className={`px-3 py-2 font-bold uppercase border ${!adaptiveQuality.enabled && adaptiveQuality.level === lvl ? 'border-orange-500 bg-orange-900/30 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:bg-gray-800'}`}
+                                        onClick={() => { forceQualityLevel(lvl); setRefreshCounter(p => p + 1); }}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="text-green-700 font-bold mt-4 mb-1 border-b border-gray-800">GRAPHICS FIDELITY</div>
                             <div className="text-[10px] text-gray-500 mb-1">Toggle the rendering features live. Useful for A/B comparison and for dropping effects on low-end devices.</div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gfxToggles.map(renderGfxToggle)}

@@ -101,6 +101,9 @@ export interface Entity {
   radius: number;
   color: string;
   markedForDeletion: boolean;
+  // Transient per-query dedup marker used by SpatialHash (avoids allocating a
+  // Set per query). Not gameplay state — safe to ignore everywhere else.
+  _qStamp?: number;
 }
 
 export interface Obstacle extends Entity {
