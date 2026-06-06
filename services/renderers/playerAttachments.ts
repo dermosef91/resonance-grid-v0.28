@@ -644,7 +644,7 @@ export const computeBodyStyle = (player: Player, quality: 'HIGH' | 'LOW'): BodyS
             undulate = Math.max(undulate, 0.04 + w.level * 0.004); // living wobble
             bulge = Math.max(bulge, 0.10 + w.level * 0.02);        // rounded organic blob
         }
-        if (w.id === 'paradox_pendulum') shatter = Math.max(shatter, Math.min(0.25, 0.06 + w.level * 0.02)); // barely-held-together
+        if (w.id === 'paradox_pendulum') shatter = Math.max(shatter, Math.min(0.5, 0.18 + w.level * 0.04)); // barely-held-together
         if (w.id === 'fractal_bloom' && quality === 'HIGH') {
             fringe = Math.max(fringe, 0.25 + w.level * 0.05); // sea-urchin edge bristles
             bud = Math.max(bud, 0.12 + w.level * 0.03);       // recursive child octahedra
