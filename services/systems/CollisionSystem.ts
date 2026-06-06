@@ -80,8 +80,15 @@ export const resolveCollisions = (
             }
         } else {
             let nearbyEnemies: Enemy[] = [];
-            if (proj.beamData || proj.paradoxData) nearbyEnemies = enemies;
-            else nearbyEnemies = grid.query(proj.pos, proj.radius + 30) as Enemy[];
+            if (proj.beamData) {
+                // Broad-phase along the beam segment instead of scanning all enemies.
+                const bd = proj.beamData;
+                const end = { x: proj.pos.x + Math.cos(bd.angle) * bd.length, y: proj.pos.y + Math.sin(bd.angle) * bd.length };
+                nearbyEnemies = grid.queryBeam(proj.pos, end, bd.width / 2 + 40) as Enemy[];
+            } else {
+                // Paradox pendulum is point-based at proj.pos, so the normal query works too.
+                nearbyEnemies = grid.query(proj.pos, proj.radius + 30) as Enemy[];
+            }
 
             for (const enemy of nearbyEnemies) {
                 if (enemy.markedForDeletion) continue;

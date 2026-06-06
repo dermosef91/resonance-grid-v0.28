@@ -15,6 +15,7 @@ import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
 import { audioEngine } from '../services/audioEngine';
 import { renderGame } from '../services/renderService';
+import { sampleFrame, initAdaptiveQuality } from '../services/adaptiveQuality';
 import { lerpPaletteColors, parseColorToRgb } from '../services/renderUtils';
 import { BASE_WEAPONS, BASE_ARTIFACTS, getWavePalette } from '../services/gameData';
 import { saveMetaState } from '../services/persistence';
@@ -500,13 +501,15 @@ export const useGameEngine = (
                         r.rotation = player.rotation;
                     }
 
-                    particlesRef.current.push(getVisualParticle({
-                        id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
-                        pos: { ...r.pos },
-                        velocity: { x: (Math.random() - 0.5), y: (Math.random() - 0.5) },
-                        radius: 0, color: r.color, markedForDeletion: false,
-                        life: 15, maxLife: 15, size: 3, decay: 0.8, shape: 'CIRCLE'
-                    }));
+                    if (frameRef.current % 4 === 0) {
+                        particlesRef.current.push(getVisualParticle({
+                            id: Math.random().toString(), type: EntityType.VISUAL_PARTICLE,
+                            pos: { ...r.pos },
+                            velocity: { x: (Math.random() - 0.5), y: (Math.random() - 0.5) },
+                            radius: 0, color: r.color, markedForDeletion: false,
+                            life: 15, maxLife: 15, size: 3, decay: 0.8, shape: 'CIRCLE'
+                        }));
+                    }
                 }
 
                 if (missionRef.current.isComplete) {
@@ -1004,20 +1007,60 @@ export const useGameEngine = (
         });
         addEnemies(newSpawns);
 
-        const keptProjectiles: Projectile[] = [];
-        projectilesRef.current.forEach((p: any) => { if (p.markedForDeletion) projectilePool.release(p); else keptProjectiles.push(p); });
-        projectilesRef.current = keptProjectiles;
-        pickupsRef.current = pickupsRef.current.filter((p: any) => !p.markedForDeletion);
-        const keptParticles: (TextParticle | VisualParticle)[] = [];
-        particlesRef.current.forEach((p: any) => {
+        // In-place compaction (two-pointer) so we don't allocate fresh arrays
+        // every frame; dead pooled items are released back to their pools.
+        const projArr = projectilesRef.current as Projectile[];
+        let projW = 0;
+        for (let i = 0; i < projArr.length; i++) {
+            const p = projArr[i];
+            if (p.markedForDeletion) projectilePool.release(p);
+            else projArr[projW++] = p;
+        }
+        projArr.length = projW;
+
+        const pickArr = pickupsRef.current as any[];
+        let pickW = 0;
+        for (let i = 0; i < pickArr.length; i++) {
+            const p = pickArr[i];
+            if (!p.markedForDeletion) pickArr[pickW++] = p;
+        }
+        pickArr.length = pickW;
+
+        const partArr = particlesRef.current as (TextParticle | VisualParticle)[];
+        let partW = 0;
+        for (let i = 0; i < partArr.length; i++) {
+            const p: any = partArr[i];
             if (p.type === EntityType.TEXT_PARTICLE) { const tp = p as TextParticle; tp.pos.y += tp.velocity.y; tp.life--; if (tp.life <= 0) tp.markedForDeletion = true; else tp.opacity = Math.min(1, tp.life / 30); }
             else { const vp = p as VisualParticle; vp.pos.x += vp.velocity.x; vp.pos.y += vp.velocity.y; vp.velocity.x *= vp.decay; vp.velocity.y *= vp.decay; if (vp.rotation !== undefined && vp.rotationSpeed !== undefined) vp.rotation += vp.rotationSpeed; vp.life--; if (vp.life <= 0) vp.markedForDeletion = true; }
-            if (p.markedForDeletion) { if (p.type === EntityType.TEXT_PARTICLE) textParticlePool.release(p as TextParticle); else if (p.type === EntityType.VISUAL_PARTICLE) visualParticlePool.release(p as VisualParticle); } else keptParticles.push(p);
-        });
-        particlesRef.current = keptParticles;
+            if (p.markedForDeletion) { if (p.type === EntityType.TEXT_PARTICLE) textParticlePool.release(p as TextParticle); else if (p.type === EntityType.VISUAL_PARTICLE) visualParticlePool.release(p as VisualParticle); }
+            else partArr[partW++] = p;
+        }
+        partArr.length = partW;
 
-        // Cleanup Mission Entities
-        missionEntitiesRef.current = missionEntitiesRef.current.filter((e: any) => !e.markedForDeletion);
+        // Hard cap on particles: during heavy death/shatter bursts the (purely
+        // cosmetic) particle list can explode and tank the frame. Drop the oldest
+        // ones back to their pools when over budget (copyWithin shifts in place,
+        // no allocation).
+        const MAX_PARTICLES = 1400;
+        if (partArr.length > MAX_PARTICLES) {
+            const excess = partArr.length - MAX_PARTICLES;
+            for (let i = 0; i < excess; i++) {
+                const p: any = partArr[i];
+                if (p.type === EntityType.TEXT_PARTICLE) textParticlePool.release(p as TextParticle);
+                else if (p.type === EntityType.VISUAL_PARTICLE) visualParticlePool.release(p as VisualParticle);
+            }
+            partArr.copyWithin(0, excess);
+            partArr.length = MAX_PARTICLES;
+        }
+
+        // Cleanup Mission Entities (in place)
+        const meArr = missionEntitiesRef.current as any[];
+        let meW = 0;
+        for (let i = 0; i < meArr.length; i++) {
+            const e = meArr[i];
+            if (!e.markedForDeletion) meArr[meW++] = e;
+        }
+        meArr.length = meW;
 
         // Boss HUD: re-push only when the set of bosses or their health changes
         // (empty between fights -> stable signature -> no re-render).
@@ -1071,6 +1114,9 @@ export const useGameEngine = (
 
     }, [status, showDebug, generateUpgrades, gameOver, tutorialStep, addEnemies]);
 
+    // Seed the adaptive quality controller's render settings once on mount.
+    useEffect(() => { initAdaptiveQuality(); }, []);
+
     useEffect(() => {
         let animationId: number;
         let lastTime = performance.now();
@@ -1081,6 +1127,10 @@ export const useGameEngine = (
             const deltaTime = currentTime - lastTime; lastTime = currentTime; const safeDelta = Math.min(deltaTime, 250); accumulator += safeDelta * GAME_SPEED;
             while (accumulator >= FIXED_TIMESTEP) { if (status !== 'MENU') { if (status === 'PLAYING' && !showDebug) { if (hitStopRef.current > 0) hitStopRef.current--; else update(); } frameRef.current++; } accumulator -= FIXED_TIMESTEP; }
             if (glitchIntensityRef.current > 0.1) glitchIntensityRef.current *= 0.9; else glitchIntensityRef.current = 0;
+
+            // Feed the adaptive quality controller during active gameplay so it can
+            // shed/restore expensive render passes based on real frame timing.
+            if (status === 'PLAYING' && !showDebug) sampleFrame(deltaTime);
 
             if (canvasRef.current && status !== 'MENU') {
                 let ctx = ctx2dRef.current;
