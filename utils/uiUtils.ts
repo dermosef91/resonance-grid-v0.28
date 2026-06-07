@@ -108,7 +108,25 @@ export const getMissionColorConfig = (type: string) => {
                 hoverBorder: 'group-hover:border-purple-500/50',
                 splashShadow: 'shadow-[0_0_30px_rgba(153,0,255,0.6)]'
             };
-        default: 
+        case MissionType.SOUL_TITHE:
+            return {
+                hex: '#FFB000',
+                border: 'border-amber-500',
+                text: 'text-amber-400',
+                shadow: 'shadow-amber-900/30',
+                hoverBorder: 'group-hover:border-amber-500/50',
+                splashShadow: 'shadow-[0_0_30px_rgba(255,176,0,0.5)]'
+            };
+        case MissionType.SANKOFA_TRAIL:
+            return {
+                hex: '#FFAA33',
+                border: 'border-orange-400',
+                text: 'text-orange-300',
+                shadow: 'shadow-orange-900/30',
+                hoverBorder: 'group-hover:border-orange-400/50',
+                splashShadow: 'shadow-[0_0_30px_rgba(255,170,51,0.5)]'
+            };
+        default:
             return { 
                 hex: '#ff6600', 
                 border: 'border-orange-500', 

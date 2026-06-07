@@ -251,9 +251,55 @@ export const initMissionState = (wave: WaveConfig, player: Player): { mission: M
         }
         // Mark for initial guard spawn
         m.customData.needsSpawn = true;
+    } else if (m.type === MissionType.SOUL_TITHE) {
+        // Bank N essence at the Reliquary. Essence drops from slain enemies (handled
+        // in the game loop) and decays on the ground; carry it home before it fades.
+        m.total = wave.missionParam; // Essence required
+        m.description = "GATHER ESSENCE";
+        m.customData = { essenceHeld: 0, bankTimer: 0 };
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 900;
+        const reliquaryPos = {
+            x: player.pos.x + Math.cos(angle) * dist,
+            y: player.pos.y + Math.sin(angle) * dist
+        };
+        const reliquary = createMissionEntity(reliquaryPos, 'STATION');
+        reliquary.color = '#FFB000'; // Amber Reliquary (distinct from white escort station)
+        reliquary.active = true;
+        entities.push(reliquary);
+        m.targetIds = [reliquary.id];
+    } else if (m.type === MissionType.SANKOFA_TRAIL) {
+        // Reclaim an ordered chain of fading memory-glyphs, one live at a time.
+        m.total = wave.missionParam; // Number of glyphs
+        m.description = "RECLAIM THE MEMORY";
+        m.customData = { trailIndex: 0, glyphTimer: GLYPH_LIFETIME };
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 700;
+        const glyphPos = {
+            x: player.pos.x + Math.cos(angle) * dist,
+            y: player.pos.y + Math.sin(angle) * dist
+        };
+        const glyph = createMissionPickup(glyphPos, 'MISSION_ITEM');
+        glyph.color = '#FFAA33'; // Warm Sankofa amber
+        pickups.push(glyph);
+        m.targetIds = [glyph.id];
     }
 
     return { mission: m, entities, pickups };
+};
+
+// SANKOFA_TRAIL: frames a glyph stays put before it drifts to a new location.
+const GLYPH_LIFETIME = 480; // ~8s
+// SANKOFA_TRAIL: helper to place the next glyph at trail spacing from the player.
+const makeTrailGlyph = (player: Player): Pickup => {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 600 + Math.random() * 250;
+    const glyph = createMissionPickup({
+        x: player.pos.x + Math.cos(angle) * dist,
+        y: player.pos.y + Math.sin(angle) * dist
+    }, 'MISSION_ITEM');
+    glyph.color = '#FFAA33';
+    return glyph;
 };
 
 export const updateMission = (
@@ -1153,6 +1199,58 @@ export const updateMission = (
             result.mission.customData = { ...mission.customData, solarData: sd };
         }
     }
+    else if (mission.type === MissionType.SOUL_TITHE) {
+        // Bank held essence when the player stands on the Reliquary.
+        if (mission.progress >= mission.total) { result.isComplete = true; }
+        else {
+            const reliquary = missionEntities.find(e => e.kind === 'STATION');
+            const held = mission.customData?.essenceHeld || 0;
+            let bankTimer = mission.customData?.bankTimer || 0;
+            if (bankTimer > 0) bankTimer--;
+
+            if (reliquary && held > 0) {
+                const dx = player.pos.x - reliquary.pos.x;
+                const dy = player.pos.y - reliquary.pos.y;
+                if (dx * dx + dy * dy < (reliquary.radius + player.radius) ** 2) {
+                    const banked = Math.min(held, mission.total - mission.progress);
+                    result.mission.progress = mission.progress + banked;
+                    result.mission.customData = { ...mission.customData, essenceHeld: 0, bankTimer: 90 };
+                    result.newParticles.push({ pos: { ...player.pos }, text: `TITHE PAID +${banked}`, color: '#FFB000', duration: 60 });
+                    result.screenShake = 6;
+                    // Banking is not free: a small guard pack answers the offering.
+                    if (bankTimer === 0 && result.mission.progress < mission.total) {
+                        const guardCount = 2 + Math.floor(waveIndex / 4);
+                        for (let i = 0; i < guardCount; i++) {
+                            result.newEnemies.push(spawnEnemy(player, EnemyType.SWARMER, undefined, waveIndex));
+                        }
+                    }
+                    if (result.mission.progress >= mission.total) result.isComplete = true;
+                    return result;
+                }
+            }
+            result.mission.customData = { ...mission.customData, bankTimer };
+        }
+    }
+    else if (mission.type === MissionType.SANKOFA_TRAIL) {
+        if (mission.progress >= mission.total) { result.isComplete = true; }
+        else {
+            // The live glyph drifts to a new location if not reclaimed in time.
+            let glyphTimer = (mission.customData?.glyphTimer ?? GLYPH_LIFETIME) - 1;
+            if (glyphTimer <= 0) {
+                const liveId = mission.targetIds?.[0];
+                const glyph = pickups.find(p => p.id === liveId);
+                if (glyph) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 600 + Math.random() * 250;
+                    glyph.pos.x = player.pos.x + Math.cos(angle) * dist;
+                    glyph.pos.y = player.pos.y + Math.sin(angle) * dist;
+                    result.newParticles.push({ pos: { ...glyph.pos }, text: "THE MEMORY DRIFTS", color: '#FFAA33', duration: 50 });
+                }
+                glyphTimer = GLYPH_LIFETIME;
+            }
+            result.mission.customData = { ...mission.customData, glyphTimer };
+        }
+    }
 
     // Persist completion state to the mission object
     if (result.isComplete) {
@@ -1199,6 +1297,29 @@ export const handleMissionPickup = (
             result.mission.customData = { uploadTimer: 60 }; // 60 frames = 1 second
             // Particle to indicate start
             // result.newParticles.push({ pos: { ...pos }, text: "INITIALIZING UPLOAD", color: '#00FFFF', duration: 60 });
+        }
+    }
+    else if (mission.type === MissionType.SOUL_TITHE && kind === 'ESSENCE') {
+        // Collected essence is carried (safe from decay) until banked at the Reliquary.
+        const held = (mission.customData?.essenceHeld || 0) + 1;
+        result.mission.customData = { ...mission.customData, essenceHeld: held };
+        result.newParticles.push({ pos: { ...pos }, text: `ESSENCE x${held}`, color: '#FFB000', duration: 35 });
+    }
+    else if (mission.type === MissionType.SANKOFA_TRAIL && kind === 'MISSION_ITEM') {
+        const progress = mission.progress + 1;
+        const index = (mission.customData?.trailIndex || 0) + 1;
+        result.mission.progress = progress;
+        result.newParticles.push({ pos: { ...pos }, text: "MEMORY RECLAIMED", color: '#FFAA33', duration: 45 });
+        if (progress >= mission.total) {
+            result.isComplete = true;
+            result.mission.targetIds = [];
+            result.mission.customData = { ...mission.customData, trailIndex: index };
+        } else {
+            // Light the next glyph in the chain and refresh its drift timer.
+            const next = makeTrailGlyph(player);
+            result.newPickups.push(next);
+            result.mission.targetIds = [next.id];
+            result.mission.customData = { ...mission.customData, trailIndex: index, glyphTimer: GLYPH_LIFETIME };
         }
     }
 

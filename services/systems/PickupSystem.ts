@@ -16,6 +16,12 @@ export const updatePickups = (
         // Skip processing for uploading zones to prevent multiple triggers
         if ((p as any).isUploading) return;
 
+        // Decay: pickups with a decayTimer (e.g. SOUL_TITHE essence) dissipate over time.
+        if (p.decayTimer !== undefined && !p.magnetized) {
+            p.decayTimer--;
+            if (p.decayTimer <= 0) { p.markedForDeletion = true; return; }
+        }
+
         let dx = p.pos.x - player.pos.x;
         let dy = p.pos.y - player.pos.y;
         let distSq = dx * dx + dy * dy;
@@ -25,7 +31,7 @@ export const updatePickups = (
         // Magnet Logic
         // Only apply magnet to enemy drops (XP, Currency, Health).
         // Exclude Supply Drops and Mission Items from being magnetized.
-        const isMagnetizable = p.kind === 'XP' || p.kind === 'CURRENCY' || p.kind === 'HEALTH';
+        const isMagnetizable = p.kind === 'XP' || p.kind === 'CURRENCY' || p.kind === 'HEALTH' || p.kind === 'ESSENCE';
 
         if (isMagnetizable && !p.magnetized && distSq < magnetR * magnetR) {
             p.magnetized = true;

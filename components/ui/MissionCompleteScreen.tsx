@@ -24,6 +24,8 @@ export const MissionCompleteScreen: React.FC<{
             case MissionType.SHADOW_STEP: return 'mission_shadow';
             case MissionType.ENTANGLEMENT: return 'mission_koth'; // Reuse KOTH icon or similar
             case MissionType.THE_GREAT_FILTER: return 'mission_data_run'; // Placeholder
+            case MissionType.SOUL_TITHE: return 'mission_payload'; // Deliver-style icon
+            case MissionType.SANKOFA_TRAIL: return 'mission_data_run'; // Collect-run icon
             default: return 'titan_frame';
         }
     }
@@ -45,6 +47,8 @@ export const MissionCompleteScreen: React.FC<{
             case MissionType.SHADOW_STEP: return "SURVIVE (WEAPONS JAMMED)";
             case MissionType.ENTANGLEMENT: return "LINK MAINTAINED";
             case MissionType.THE_GREAT_FILTER: return "GATEWAY PASSED";
+            case MissionType.SOUL_TITHE: return "GATHER ESSENCE";
+            case MissionType.SANKOFA_TRAIL: return "RECLAIM THE MEMORY";
             default: return type.replace(/_/g, ' ');
         }
     }

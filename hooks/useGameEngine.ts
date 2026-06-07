@@ -9,7 +9,7 @@ import { PostProcessor } from '../services/postFx/PostProcessor';
 import { graphicsSettings } from '../services/graphicsSettings';
 import {
     spawnEnemy, createXP, createCurrency, createHealthPickup, createTimeCrystal, createStasisFieldPickup,
-    createSupplyDrop, createTextParticle, createShatterParticles, createPolygonShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle
+    createSupplyDrop, createTextParticle, createShatterParticles, createPolygonShatterParticles, createBossDeathExplosion, createMissionPickup, createEventHorizon, createKaleidoscopePickup, createObstacle, createEssence
 } from '../services/gameLogic';
 import { checkCollision } from '../services/PhysicsSystem';
 import { inputSystem } from '../services/InputSystem';
@@ -303,6 +303,8 @@ export const useGameEngine = (
         if (nextWave.missionType === MissionType.SHADOW_STEP) desc = "SURVIVE (WEAPONS JAMMED)";
         if (nextWave.missionType === MissionType.ENTANGLEMENT) desc = "MAINTAIN LINK";
         if (nextWave.missionType === MissionType.THE_GREAT_FILTER) desc = "PASS THROUGH THE GATE";
+        if (nextWave.missionType === MissionType.SOUL_TITHE) desc = "GATHER ESSENCE";
+        if (nextWave.missionType === MissionType.SANKOFA_TRAIL) desc = "RECLAIM THE MEMORY";
         return { type: nextWave.missionType, description: desc };
     }, []);
 
@@ -665,6 +667,13 @@ export const useGameEngine = (
                     if (p.kind === 'MISSION_ZONE') p.markedForDeletion = true;
                 });
             }
+            // --- CLEAR LEFTOVER ESSENCE / MEMORY GLYPHS ---
+            if (missionRef.current.type === MissionType.SOUL_TITHE) {
+                pickupsRef.current.forEach(p => { if (p.kind === 'ESSENCE') p.markedForDeletion = true; });
+            }
+            if (missionRef.current.type === MissionType.SANKOFA_TRAIL) {
+                pickupsRef.current.forEach(p => { if (p.kind === 'MISSION_ITEM') p.markedForDeletion = true; });
+            }
 
             if (missionCompleteTimerRef.current === 0) {
                 trackEvent(runIdRef.current, 'WAVE_COMPLETE', player, metaState, waveIndexRef.current + 1, sessionCurrencyRef.current, Math.floor(frameRef.current / 60));
@@ -935,6 +944,7 @@ export const useGameEngine = (
                     }
                 }
                 if ((mission.type === MissionType.ELIMINATE) && e.isMissionTarget) { missionRef.current.progress++; particlesRef.current.push(createTextParticle(e.pos, "TARGET ELIMINATED", '#FF0000', 45)); }
+                if (mission.type === MissionType.SOUL_TITHE && !e.isBoss && missionCompleteTimerRef.current === 0 && Math.random() < 0.32) { pickupsRef.current.push(createEssence(e.pos)); }
                 dropsCounterRef.current++;
                 if (dropsCounterRef.current > 50) { dropsCounterRef.current = 0; if (missionCompleteTimerRef.current === 0) pickupsRef.current.push(createCurrency(e.pos, 10)); }
                 if (e.isBoss) {
@@ -1093,6 +1103,8 @@ export const useGameEngine = (
                     const m = missionRef.current;
                     if (m.type === MissionType.ELIMINATE || m.type === MissionType.RESCUE) { enemiesRef.current.forEach((e: any) => { if (e.isMissionTarget) targets.push({ pos: e.pos, color: '#ff0000' }); }); }
                     if (m.type === MissionType.DATA_RUN && m.targetIds) { pickupsRef.current.forEach((p: any) => { if (m.targetIds?.includes(p.id)) targets.push({ pos: p.pos, color: p.kind === 'MISSION_ZONE' ? '#00FF00' : '#00FFFF' }); }); }
+                    if (m.type === MissionType.SANKOFA_TRAIL && m.targetIds) { pickupsRef.current.forEach((p: any) => { if (m.targetIds?.includes(p.id)) targets.push({ pos: p.pos, color: '#FFAA33' }); }); }
+                    if (m.type === MissionType.SOUL_TITHE) { missionEntitiesRef.current.forEach((e: any) => { if (e.kind === 'STATION') targets.push({ pos: e.pos, color: '#FFB000', label: "RELIQUARY" }); }); }
                     if (m.type === MissionType.KING_OF_THE_HILL || m.type === MissionType.PAYLOAD_ESCORT || m.type === MissionType.RITUAL_CIRCLE || m.type === MissionType.ENTANGLEMENT || m.type === MissionType.THE_GREAT_FILTER || m.type === MissionType.RESCUE) {
                         missionEntitiesRef.current.forEach((e: any) => {
                             if (m.type === MissionType.RITUAL_CIRCLE && e.kind === 'OBELISK' && e.active) return;
