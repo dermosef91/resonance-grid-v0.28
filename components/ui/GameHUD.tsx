@@ -116,6 +116,11 @@ export const GameHUD: React.FC<{
             else displayContent = ""; // Calm
         } else if (mission.type === MissionType.ELIMINATE) {
             displayContent = `${mission.progress}/${mission.total}`;
+        } else if (mission.type === MissionType.SOUL_TITHE) {
+            const held = mission.customData?.essenceHeld || 0;
+            displayContent = held > 0 ? `${mission.progress}/${mission.total} (+${held})` : `${mission.progress}/${mission.total}`;
+        } else if (mission.type === MissionType.SANKOFA_TRAIL) {
+            displayContent = `${mission.progress}/${mission.total}`;
         } else if (mission.type === MissionType.DATA_RUN) {
             displayContent = mission.stage === 'LOCATE_FRAGMENT' ? "FIND" : "DELIVER";
         } else if (mission.type === MissionType.PAYLOAD_ESCORT) {
@@ -136,7 +141,9 @@ export const GameHUD: React.FC<{
         if (mission.type === MissionType.ELIMINATE
             || mission.type === MissionType.KING_OF_THE_HILL
             || mission.type === MissionType.RITUAL_CIRCLE
-            || mission.type === MissionType.PAYLOAD_ESCORT) {
+            || mission.type === MissionType.PAYLOAD_ESCORT
+            || mission.type === MissionType.SOUL_TITHE
+            || mission.type === MissionType.SANKOFA_TRAIL) {
             progressFraction = mission.total > 0 ? mission.progress / mission.total : 0;
         } else if (mission.type === MissionType.SURVIVE
             || mission.type === MissionType.SHADOW_STEP

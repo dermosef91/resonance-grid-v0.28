@@ -541,6 +541,25 @@ export const createMissionEntity = (pos: Vector2, kind: 'ZONE' | 'PAYLOAD' | 'OB
     };
 };
 
+export const createEssence = (pos: Vector2): Pickup => {
+    // Unstable spirit-essence dropped by slain enemies during SOUL_TITHE.
+    // Magnetizable so it sweeps up satisfyingly, but decays if left on the ground.
+    return {
+        id: Math.random().toString(),
+        type: EntityType.PICKUP,
+        kind: 'ESSENCE',
+        pos: { x: pos.x + (Math.random() - 0.5) * 10, y: pos.y + (Math.random() - 0.5) * 10 },
+        velocity: { x: 0, y: 0 },
+        radius: 9,
+        color: '#FFB000', // Amber / gold
+        value: 1,
+        markedForDeletion: false,
+        magnetized: false,
+        rotationDir: Math.random() > 0.5 ? 1 : -1,
+        decayTimer: 360 // ~6s before it dissipates
+    };
+};
+
 export const createMissionPickup = (pos: Vector2, kind: 'MISSION_ITEM' | 'MISSION_ZONE'): Pickup => {
     return {
         id: Math.random().toString(),

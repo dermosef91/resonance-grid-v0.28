@@ -23,7 +23,9 @@ const SIMPLE_MISSIONS = [
     MissionType.KING_OF_THE_HILL,
     MissionType.PAYLOAD_ESCORT,
     MissionType.RITUAL_CIRCLE,
-    MissionType.SHADOW_STEP
+    MissionType.SHADOW_STEP,
+    MissionType.SOUL_TITHE,
+    MissionType.SANKOFA_TRAIL
 ];
 
 const ADVANCED_MISSIONS = [
@@ -72,6 +74,8 @@ export const generateRunWaves = (): WaveConfig[] => {
             case MissionType.SHADOW_STEP: return 20; // Reduced to 20s
             case MissionType.EVENT_HORIZON: return 30 + (difficulty * 2); // Reduced from 45 + diff*5
             case MissionType.SOLAR_STORM: return 60; // Fixed duration for now
+            case MissionType.SOUL_TITHE: return 5 + Math.floor(difficulty); // Essence to bank
+            case MissionType.SANKOFA_TRAIL: return 4 + Math.floor(difficulty); // Glyphs to reclaim
             // No param needed for these:
             case MissionType.DATA_RUN:
             case MissionType.PAYLOAD_ESCORT:
@@ -291,6 +295,8 @@ export const generateRunWaves = (): WaveConfig[] => {
             else if (mType === MissionType.KING_OF_THE_HILL) param = 720 + (difficulty * 30);
             else if (mType === MissionType.SHADOW_STEP) param = 20; // 20s
             else if (mType === MissionType.EVENT_HORIZON) param = 30 + (difficulty * 2);
+            else if (mType === MissionType.SOUL_TITHE) param = 5 + Math.floor(difficulty * 0.5);
+            else if (mType === MissionType.SANKOFA_TRAIL) param = 4 + Math.floor(difficulty * 0.5);
 
             waves.push({
                 id: i,

@@ -122,6 +122,8 @@ export const useDebugLogic = (gameState: any, addEnemies: any) => {
         if (type === MissionType.ELIMINATE) dummyWave.missionParam = 5;
         if (type === MissionType.KING_OF_THE_HILL) dummyWave.missionParam = 1000;
         if (type === MissionType.SHADOW_STEP) dummyWave.missionParam = 30;
+        if (type === MissionType.SOUL_TITHE) dummyWave.missionParam = 5;
+        if (type === MissionType.SANKOFA_TRAIL) dummyWave.missionParam = 4;
         const { mission, entities, pickups } = initMissionState(dummyWave, playerRef.current);
         missionRef.current = mission;
         missionEntitiesRef.current = entities;

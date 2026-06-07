@@ -358,9 +358,10 @@ export interface Projectile extends Entity {
 export interface Pickup extends Entity {
   value: number; // XP amount or Health amount
   magnetized: boolean;
-  kind: 'XP' | 'HEALTH' | 'CURRENCY' | 'SUPPLY_DROP' | 'MISSION_ITEM' | 'MISSION_ZONE' | 'TIME_CRYSTAL' | 'KALEIDOSCOPE' | 'STASIS_FIELD';
+  kind: 'XP' | 'HEALTH' | 'CURRENCY' | 'SUPPLY_DROP' | 'MISSION_ITEM' | 'MISSION_ZONE' | 'TIME_CRYSTAL' | 'KALEIDOSCOPE' | 'STASIS_FIELD' | 'ESSENCE';
   rotationDir?: number; // 1 or -1 for swirl direction
   supplyContent?: 'CURRENCY_50' | 'FULL_HEALTH' | 'LEVEL_UP' | 'TEMPORAL_BOOST' | 'EXTRA_LIFE';
+  decayTimer?: number; // Frames until this pickup dissipates (SOUL_TITHE essence); undefined = permanent
 }
 
 export interface TextParticle extends Entity {
@@ -484,7 +485,9 @@ export enum MissionType {
   THE_GREAT_FILTER = 'THE_GREAT_FILTER',
   EVENT_HORIZON = 'EVENT_HORIZON',
   SOLAR_STORM = 'SOLAR_STORM',
-  RESCUE = 'RESCUE'
+  RESCUE = 'RESCUE',
+  SOUL_TITHE = 'SOUL_TITHE',
+  SANKOFA_TRAIL = 'SANKOFA_TRAIL'
 }
 
 export interface MissionState {
@@ -516,6 +519,10 @@ export interface MissionState {
     guardsSpawned?: boolean; // RESCUE: Flag to indicate guards are active
     spawnTime?: number; // RESCUE: Timestamp of spawn to prevent instant-clear
     phase2Started?: boolean; // RESCUE: Flag to trigger elite wave
+    essenceHeld?: number; // SOUL_TITHE: Essence carried but not yet banked
+    bankTimer?: number; // SOUL_TITHE: Cooldown before next banking guard pack
+    trailIndex?: number; // SANKOFA_TRAIL: Index of the current live glyph
+    glyphTimer?: number; // SANKOFA_TRAIL: Frames until the live glyph drifts away
   };
 }
 
